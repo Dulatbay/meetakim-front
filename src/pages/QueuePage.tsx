@@ -188,7 +188,7 @@ export const QueuePage = () => {
             case 'WAITING':
                 return 'В ожидании';
             case 'BUFFER':
-                return 'Ваша очередь скоро подойдет!';
+                return 'Ваша очередь';
             case 'ACTIVE':
                 return 'Ваша встреча началась';
             case 'COMPLETED':
