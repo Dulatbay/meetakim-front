@@ -13,7 +13,7 @@ const App = () => {
                 <Route path="/auth/callback" element={<CallbackPage/>}/>
 
                 <Route
-                    path="/status"
+                    path="/queue"
                     element={
                         <RequireAuth>
                             <QueuePage/>

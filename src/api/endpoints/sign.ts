@@ -1,4 +1,4 @@
-import {egovAxios} from "../signApi";
+import axiosInstance from "../axiosInstance.ts";
 import type {
     SignCallbackPayload,
     SignCallbackResponse,
@@ -7,7 +7,7 @@ import type {
 } from "../../types/sign.t.ts";
 
 export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; contentType: string | null }> => {
-    const response = await egovAxios.get(`/api/qr`, {
+    const response = await axiosInstance.get(`/api/qr`, {
         params: {sessionId},
         responseType: "blob",
         headers: {
@@ -23,21 +23,21 @@ export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; co
 };
 
 export const initSign = async (sessionId: string): Promise<SignInitResponse> => {
-    const {data} = await egovAxios.get<SignInitResponse>(`/api/sign/init`, {
+    const {data} = await axiosInstance.get<SignInitResponse>(`/api/sign/init`, {
         params: {sessionId},
     });
     return data;
 };
 
 export const getSignStatus = async (sessionId: string): Promise<SignStatusResponse> => {
-    const {data} = await egovAxios.get<SignStatusResponse>(`/api/sign/status`, {
+    const {data} = await axiosInstance.get<SignStatusResponse>(`/api/sign/status`, {
         params: {sessionId},
     });
     return data;
 };
 
 export const postSignCallback = async (payload: SignCallbackPayload): Promise<SignCallbackResponse> => {
-    const {data} = await egovAxios.post<SignCallbackResponse>(`/api/sign/callback`, payload, {
+    const {data} = await axiosInstance.post<SignCallbackResponse>(`/api/sign/callback`, payload, {
         headers: {"Content-Type": "application/json"},
     });
     return data;
