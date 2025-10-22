@@ -28,7 +28,7 @@ export const LoginPage = () => {
 
     const loadQr = async () => {
         try {
-            const { imageUrl } = await fetchQr(sessionId);
+            const { imageUrl } = await fetchQr("123");
             setBlobUrlSafely(imageUrl);
         } catch (e) {
             console.error(e);
@@ -43,11 +43,9 @@ export const LoginPage = () => {
                 const resp: SignStatusResponse = await getSignStatus(sessionId);
 
                 if (resp.status === "SIGNED") {
-                    // Есть подпись — считаем это финальным «токеном»
                     if (resp.signedDocument) {
                         setToken(resp.signedDocument);
                     } else {
-                        // fallback — можно сохранить sessionId как токен, если так задумано
                         setToken(resp.sessionId);
                     }
                     toast.success("Успешная авторизация");
