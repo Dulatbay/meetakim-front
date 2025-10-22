@@ -40,7 +40,7 @@ export const LoginPage = () => {
         if (pollTimerRef.current) return; // уже идёт
         pollTimerRef.current = setInterval(async () => {
             try {
-                const resp: SignStatusResponse = await getSignStatus(sessionId);
+                const resp: SignStatusResponse = await getSignStatus("123");
 
                 if (resp.status === "SIGNED") {
                     if (resp.signedDocument) {
