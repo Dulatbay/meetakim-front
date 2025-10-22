@@ -8,7 +8,7 @@ import type {
 
 export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; contentType: string | null }> => {
     const response = await axiosInstance.get(`/api/qr`, {
-        params: {sessionId},
+        params: {sessionId: Number(sessionId)},
         responseType: "blob",
         headers: {
             Accept: "image/*",
@@ -24,14 +24,14 @@ export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; co
 
 export const initSign = async (sessionId: string): Promise<SignInitResponse> => {
     const {data} = await axiosInstance.get<SignInitResponse>(`/api/sign/init`, {
-        params: {sessionId},
+        params: {sessionId: Number(sessionId)},
     });
     return data;
 };
 
 export const getSignStatus = async (sessionId: string): Promise<SignStatusResponse> => {
     const {data} = await axiosInstance.get<SignStatusResponse>(`/api/sign/status`, {
-        params: {sessionId},
+        params: {sessionId: Number(sessionId)},
     });
     return data;
 };

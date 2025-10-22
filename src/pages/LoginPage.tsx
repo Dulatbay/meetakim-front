@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { getToken, setToken } from "../utils/tokenUtils";
@@ -10,13 +10,12 @@ import {fetchQr, getSignStatus} from "../api/endpoints/sign.ts";
 export const LoginPage = () => {
     const navigate = useNavigate();
 
-    // Стабильный sessionId на время жизни компонента
-    const sessionId = useMemo(() => makeSessionId(), []);
+    // sessionId который можно обновить
+    const [sessionId, setSessionId] = useState(() => makeSessionId());
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const qrRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentBlobUrlRef = useRef<string | null>(null);
 
     // Очистка blob-URL при замене/размонтаже
@@ -28,7 +27,7 @@ export const LoginPage = () => {
 
     const loadQr = async () => {
         try {
-            const { imageUrl } = await fetchQr("123");
+            const { imageUrl } = await fetchQr(sessionId);
             setBlobUrlSafely(imageUrl);
         } catch (e) {
             console.error(e);
@@ -40,22 +39,31 @@ export const LoginPage = () => {
         if (pollTimerRef.current) return; // уже идёт
         pollTimerRef.current = setInterval(async () => {
             try {
-                const resp: SignStatusResponse = await getSignStatus("123");
+                const resp: SignStatusResponse = await getSignStatus(sessionId);
 
                 if (resp.status === "SIGNED") {
                     if (resp.signedDocument) {
                         setToken(resp.signedDocument);
                     } else {
-                        setToken(resp.sessionId);
+                        // fallback — сохраняем sessionId как строку
+                        setToken(String(resp.sessionId));
                     }
                     toast.success("Успешная авторизация");
-                    stopAllTimers();
+                    stopPolling();
                     navigate("/queue");
                 } else if (resp.status === "FAILED") {
                     toast.error("Авторизация отклонена в eGov Mobile");
                     stopPolling();
                 } // PENDING — просто ждём дальше
-            } catch (e) {
+            } catch (e: unknown) {
+                // Игнорируем ошибки 400/404 - сессия еще не инициализирована или не найдена
+                const isAxiosError = typeof e === 'object' && e !== null && 'response' in e;
+                const status = isAxiosError ? (e as { response?: { status?: number } }).response?.status : undefined;
+
+                if (status === 400 || status === 404) {
+                    console.debug("Session not yet initialized or not found, waiting...");
+                    return;
+                }
                 console.warn("Status poll error:", e);
                 // тихо продолжаем; при длительных ошибках можно показать подсказку
             }
@@ -71,10 +79,6 @@ export const LoginPage = () => {
 
     const stopAllTimers = () => {
         stopPolling();
-        if (qrRefreshTimerRef.current) {
-            clearInterval(qrRefreshTimerRef.current);
-            qrRefreshTimerRef.current = null;
-        }
     };
 
     useEffect(() => {
@@ -86,11 +90,6 @@ export const LoginPage = () => {
                 await loadQr();
 
                 startPollingStatus();
-
-                qrRefreshTimerRef.current = setInterval(() => {
-                    if (!mounted) return;
-                    loadQr();
-                }, 60_000);
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -108,8 +107,14 @@ export const LoginPage = () => {
     }, [sessionId]);
 
     const handleManualRefresh = async () => {
-        await loadQr();
-        toast.info("QR обновлён");
+        // Останавливаем старый polling
+        stopAllTimers();
+
+        // Генерируем новый sessionId
+        const newSessionId = makeSessionId();
+        setSessionId(newSessionId);
+
+        toast.success("QR обновлён с новым ID");
     };
 
     useEffect(() => {
@@ -174,4 +179,3 @@ export const LoginPage = () => {
         </div>
     );
 };
-
