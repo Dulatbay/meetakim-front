@@ -1,10 +1,18 @@
 import axiosInstance from "../axiosInstance.ts";
 import type {
+    CreateSessionResponse,
     SignCallbackPayload,
     SignCallbackResponse,
     SignInitResponse,
     SignStatusResponse
 } from "../../types/sign.t.ts";
+
+export const createSession = async (uuid: string): Promise<CreateSessionResponse> => {
+    const {data} = await axiosInstance.get<CreateSessionResponse>(`/api/sign/create_session`, {
+        params: {uuid},
+    });
+    return data;
+};
 
 export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; contentType: string | null }> => {
     const response = await axiosInstance.get(`/api/qr`, {

@@ -1,7 +1,23 @@
+export type CreateSessionResponse = {
+    id: number;
+    sessionUuid: string;
+    expiry: string;
+    state: string;
+    user: {
+        id: number;
+        iin: string;
+        fullName: string;
+        placeOfRegistrationCity: string;
+        role: string;
+        password: string;
+    } | null;
+    createdAt: string;
+};
+
 export type SignInitResponse = {
-    sessionId: string;
+    sessionId: number;
     timestamp: number;
-    signUrl: string;     // https://meet-akim.kz/api/sign/init?sessionId=123
+    signUrl: string;
     status: "OK" | string;
 };
 
@@ -18,10 +34,17 @@ export type SignCallbackResponse = {
 };
 
 export type SignStatusResponse = {
-    sessionId: string;
-    status: "PENDING" | "SIGNED" | "FAILED" | string;
-    createdAt?: string;
-    updatedAt?: string;
-    phoneNumber?: string | null;
-    signedDocument?: string | null; // BASE64_SIGNATURE
+    id: number;
+    sessionUuid: string;
+    expiry: string;
+    state: string;
+    user: {
+        id: number;
+        iin: string;
+        fullName: string;
+        placeOfRegistrationCity: string;
+        role: string;
+        password: string;
+    } | null;
+    createdAt: string;
 };

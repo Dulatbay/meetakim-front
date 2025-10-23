@@ -5,13 +5,14 @@ import { getToken, setToken } from "../utils/tokenUtils";
 import { makeSessionId } from "../utils/session";
 
 import type { SignStatusResponse } from "../types/sign.t";
-import {fetchQr, getSignStatus} from "../api/endpoints/sign.ts";
+import {createSession, fetchQr, getSignStatus} from "../api/endpoints/sign.ts";
 
 export const LoginPage = () => {
     const navigate = useNavigate();
 
-    // sessionId который можно обновить
-    const [sessionId, setSessionId] = useState(() => makeSessionId());
+    // UUID для создания сессии
+    const [uuid] = useState(() => makeSessionId());
+    const [sessionId, setSessionId] = useState<number | null>(null);
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -25,33 +26,22 @@ export const LoginPage = () => {
         setQrUrl(url);
     };
 
-    const loadQr = async () => {
-        try {
-            const { imageUrl } = await fetchQr(sessionId);
-            setBlobUrlSafely(imageUrl);
-        } catch (e) {
-            console.error(e);
-            toast.error("Не удалось загрузить QR. Попробуйте обновить.");
-        }
-    };
-
     const startPollingStatus = () => {
-        if (pollTimerRef.current) return; // уже идёт
+        if (pollTimerRef.current || !sessionId) return; // уже идёт или нет sessionId
         pollTimerRef.current = setInterval(async () => {
             try {
-                const resp: SignStatusResponse = await getSignStatus(sessionId);
+                const resp: SignStatusResponse = await getSignStatus(String(sessionId));
 
-                if (resp.status === "SIGNED") {
-                    if (resp.signedDocument) {
-                        setToken(resp.signedDocument);
+                if (resp.state === "SIGNED") {
+                    if (resp.user?.iin) {
+                        setToken(resp.user.iin);
                     } else {
-                        // fallback — сохраняем sessionId как строку
-                        setToken(String(resp.sessionId));
+                        setToken(String(resp.id));
                     }
                     toast.success("Успешная авторизация");
                     stopPolling();
                     navigate("/queue");
-                } else if (resp.status === "FAILED") {
+                } else if (resp.state === "FAILED") {
                     toast.error("Авторизация отклонена в eGov Mobile");
                     stopPolling();
                 } // PENDING — просто ждём дальше
@@ -65,7 +55,6 @@ export const LoginPage = () => {
                     return;
                 }
                 console.warn("Status poll error:", e);
-                // тихо продолжаем; при длительных ошибках можно показать подсказку
             }
         }, 2000);
     };
@@ -87,9 +76,19 @@ export const LoginPage = () => {
         (async () => {
             setLoading(true);
             try {
-                await loadQr();
+                // Создаем сессию с UUID
+                const session = await createSession(uuid);
+                setSessionId(session.id);
 
+                // Загружаем QR с полученным sessionId
+                const { imageUrl } = await fetchQr(String(session.id));
+                setBlobUrlSafely(imageUrl);
+
+                // Начинаем проверку статуса
                 startPollingStatus();
+            } catch (e) {
+                console.error(e);
+                toast.error("Не удалось создать сессию. Попробуйте обновить страницу.");
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -104,17 +103,32 @@ export const LoginPage = () => {
             }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sessionId]);
+    }, [uuid]);
 
     const handleManualRefresh = async () => {
         // Останавливаем старый polling
         stopAllTimers();
 
-        // Генерируем новый sessionId
-        const newSessionId = makeSessionId();
-        setSessionId(newSessionId);
+        setLoading(true);
+        try {
+            // Создаем новую сессию с тем же UUID
+            const session = await createSession(uuid);
+            setSessionId(session.id);
 
-        toast.success("QR обновлён с новым ID");
+            // Загружаем новый QR
+            const { imageUrl } = await fetchQr(String(session.id));
+            setBlobUrlSafely(imageUrl);
+
+            // Запускаем polling снова
+            startPollingStatus();
+
+            toast.success("QR обновлён");
+        } catch (e) {
+            console.error(e);
+            toast.error("Не удалось обновить QR. Попробуйте ещё раз.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -179,3 +193,4 @@ export const LoginPage = () => {
         </div>
     );
 };
+
