@@ -10,27 +10,24 @@ import {createSession, fetchQr, getSignStatus} from "../api/endpoints/sign.ts";
 export const LoginPage = () => {
     const navigate = useNavigate();
 
-    // UUID для создания сессии
     const [uuid] = useState(() => makeSessionId());
-    const [sessionId, setSessionId] = useState<number | null>(null);
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentBlobUrlRef = useRef<string | null>(null);
 
-    // Очистка blob-URL при замене/размонтаже
     const setBlobUrlSafely = (url: string) => {
         if (currentBlobUrlRef.current) URL.revokeObjectURL(currentBlobUrlRef.current);
         currentBlobUrlRef.current = url;
         setQrUrl(url);
     };
 
-    const startPollingStatus = () => {
-        if (pollTimerRef.current || !sessionId) return; // уже идёт или нет sessionId
+    const startPollingStatus = (id: number) => {
+        if (pollTimerRef.current) return; // уже запущен
         pollTimerRef.current = setInterval(async () => {
             try {
-                const resp: SignStatusResponse = await getSignStatus(String(sessionId));
+                const resp: SignStatusResponse = await getSignStatus(String(id));
 
                 if (resp.state === "SIGNED") {
                     if (resp.user?.iin) {
@@ -46,7 +43,6 @@ export const LoginPage = () => {
                     stopPolling();
                 } // PENDING — просто ждём дальше
             } catch (e: unknown) {
-                // Игнорируем ошибки 400/404 - сессия еще не инициализирована или не найдена
                 const isAxiosError = typeof e === 'object' && e !== null && 'response' in e;
                 const status = isAxiosError ? (e as { response?: { status?: number } }).response?.status : undefined;
 
@@ -76,16 +72,12 @@ export const LoginPage = () => {
         (async () => {
             setLoading(true);
             try {
-                // Создаем сессию с UUID
                 const session = await createSession(uuid);
-                setSessionId(session.id);
 
-                // Загружаем QR с полученным sessionId
                 const { imageUrl } = await fetchQr(String(session.id));
                 setBlobUrlSafely(imageUrl);
 
-                // Начинаем проверку статуса
-                startPollingStatus();
+                startPollingStatus(session.id);
             } catch (e) {
                 console.error(e);
                 toast.error("Не удалось создать сессию. Попробуйте обновить страницу.");
@@ -106,21 +98,18 @@ export const LoginPage = () => {
     }, [uuid]);
 
     const handleManualRefresh = async () => {
-        // Останавливаем старый polling
         stopAllTimers();
 
         setLoading(true);
         try {
-            // Создаем новую сессию с тем же UUID
-            const session = await createSession(uuid);
-            setSessionId(session.id);
+            const newUuid = makeSessionId();
 
-            // Загружаем новый QR
+            const session = await createSession(newUuid);
+
             const { imageUrl } = await fetchQr(String(session.id));
             setBlobUrlSafely(imageUrl);
 
-            // Запускаем polling снова
-            startPollingStatus();
+            startPollingStatus(session.id);
 
             toast.success("QR обновлён");
         } catch (e) {
@@ -193,4 +182,3 @@ export const LoginPage = () => {
         </div>
     );
 };
-

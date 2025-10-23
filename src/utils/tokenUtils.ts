@@ -8,11 +8,6 @@ export const clearToken = () => {
     localStorage.removeItem("jwt_token");
 };
 
-const TOKEN_KEY = "egov_token";
-export const setEgovToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
-export const getEgovToken = () => localStorage.getItem(TOKEN_KEY);
-export const clearEgovToken = () => localStorage.removeItem(TOKEN_KEY);
-
 export const isAuthenticated = (): boolean => {
     const token = getToken();
     if (!token) {
