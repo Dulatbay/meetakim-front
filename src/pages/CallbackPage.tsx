@@ -10,13 +10,17 @@ export const CallbackPage = () => {
 
         if (token) {
             setToken(token);
-            navigate("/queue?sessionId" + (localStorage.getItem("sessionId") ?? ""));
-
-            window.close();
+            
+            setTimeout(() => {
+                navigate("/queue?sessionId" + (localStorage.getItem("sessionId") ?? ""));
+                window.close();
+            }, 7000);
         } else {
             window.close();
         }
     }, [navigate]);
 
-    return <div>Завершаем авторизацию...</div>;
+    return <div>
+        {localStorage.getItem("sessionId") ?? "No session id"}
+        Завершаем авторизацию...</div>;
 };
