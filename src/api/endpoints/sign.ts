@@ -44,6 +44,13 @@ export const getSignStatus = async (sessionId: string): Promise<SignStatusRespon
     return data;
 };
 
+export const getEgovMobileUrl = async (sessionId: string): Promise<{ url: string; sessionId: string }> => {
+    const {data} = await axiosInstance.get<{ url: string; sessionId: string }>(`/api/egov-mobile-url`, {
+        params: {sessionId: Number(sessionId)},
+    });
+    return data;
+};
+
 export const postSignCallback = async (payload: SignCallbackPayload): Promise<SignCallbackResponse> => {
     const {data} = await axiosInstance.post<SignCallbackResponse>(`/api/sign/callback`, payload, {
         headers: {"Content-Type": "application/json"},

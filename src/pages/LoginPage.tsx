@@ -5,7 +5,7 @@ import { getToken, setToken } from "../utils/tokenUtils";
 import { makeSessionId } from "../utils/session";
 
 import type { SignStatusResponse } from "../types/sign.t";
-import {createSession, fetchQr, getSignStatus} from "../api/endpoints/sign.ts";
+import {createSession, fetchQr, getSignStatus, getEgovMobileUrl} from "../api/endpoints/sign.ts";
 
 export const LoginPage = () => {
     const navigate = useNavigate();
@@ -13,6 +13,7 @@ export const LoginPage = () => {
     const [uuid] = useState(() => makeSessionId());
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [sessionId, setSessionId] = useState<number | null>(null);
 
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentBlobUrlRef = useRef<string | null>(null);
@@ -37,7 +38,7 @@ export const LoginPage = () => {
                     }
                     toast.success("Успешная авторизация");
                     stopPolling();
-                    navigate("/queue");
+                    navigate(`/queue?sessionId=${id}`);
                 } else if (resp.state === "FAILED") {
                     toast.error("Авторизация отклонена в eGov Mobile");
                     stopPolling();
@@ -73,6 +74,7 @@ export const LoginPage = () => {
             setLoading(true);
             try {
                 const session = await createSession(uuid);
+                setSessionId(session.id);
 
                 const { imageUrl } = await fetchQr(String(session.id));
                 setBlobUrlSafely(imageUrl);
@@ -105,6 +107,7 @@ export const LoginPage = () => {
             const newUuid = makeSessionId();
 
             const session = await createSession(newUuid);
+            setSessionId(session.id);
 
             const { imageUrl } = await fetchQr(String(session.id));
             setBlobUrlSafely(imageUrl);
@@ -117,6 +120,21 @@ export const LoginPage = () => {
             toast.error("Не удалось обновить QR. Попробуйте ещё раз.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleEgovMobileLogin = async () => {
+        if (!sessionId) {
+            toast.error("Сессия не создана. Попробуйте обновить страницу.");
+            return;
+        }
+
+        try {
+            const response = await getEgovMobileUrl(String(sessionId));
+            window.location.href = response.url;
+        } catch (e) {
+            console.error(e);
+            toast.error("Не удалось получить ссылку для входа");
         }
     };
 
@@ -167,6 +185,16 @@ export const LoginPage = () => {
                         disabled={loading}
                     >
                         Обновить QR
+                    </button>
+                </div>
+
+                <div className="mt-4">
+                    <button
+                        onClick={handleEgovMobileLogin}
+                        className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
+                        disabled={loading}
+                    >
+                        Войти через eGov Mobile
                     </button>
                 </div>
 

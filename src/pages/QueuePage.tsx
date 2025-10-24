@@ -1,17 +1,20 @@
 import {useState, useEffect, useCallback, useRef} from 'react';
-import {useNavigate} from 'react-router-dom';
-import axiosInstance from "../api/axiosInstance.ts";
+import {useNavigate, useSearchParams} from 'react-router-dom';
 import axios from 'axios';
 import {toast} from 'sonner';
-import type {QueueResponse, QueueStatus} from '../types/queue.t';
+import type {QueueStatus, PositionResponse} from '../types/queue.t';
 import {clearToken} from "../utils/tokenUtils.ts";
+import {queueJoin, fetchPosition} from "../api/endpoints/queue.ts";
 
 const POSITION_UPDATE_INTERVAL = 5000; // 5 секунд
 const REGISTER_THROTTLE_MS = 60_000; // 60 секунд
 const QUEUE_REGISTER_TS_KEY = 'queue_register_ts';
 
 export const QueuePage = () => {
-    const [queueData, setQueueData] = useState<QueueResponse | null>(null);
+    const [searchParams] = useSearchParams();
+    const sessionId = searchParams.get('sessionId');
+
+    const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [isOnline, setIsOnline] = useState(true);
@@ -37,9 +40,13 @@ export const QueuePage = () => {
 
     const fetchQueueStatus = useCallback(async () => {
         try {
-            // Use status endpoint for polling; do not re-register here
-            const response = await axiosInstance.get<QueueResponse>("/api/queue/status");
-            const data = response.data;
+            if (!sessionId) {
+                navigate('/login');
+                return;
+            }
+
+            // Use position endpoint for polling
+            const data = await fetchPosition(sessionId);
 
             if (!wasOnline) {
                 toast.success('Соединение восстановлено');
@@ -48,7 +55,7 @@ export const QueuePage = () => {
 
             // Status change toasts (skip first undefined -> X change)
             if (lastStatus && data?.status && lastStatus !== data.status) {
-                if (data.status === 'BUFFER') {
+                if (data.status === 'IN_BUFFER') {
                     toast.info('Ваша очередь скоро подойдет!', data.meetingUrl ? {
                         action: {
                             label: 'Перейти к встрече',
@@ -56,7 +63,7 @@ export const QueuePage = () => {
                         }
                     } : undefined);
                 }
-                if (data.status === 'ACTIVE') {
+                if (data.status === 'SERVED') {
                     toast.success('Ваша встреча началась', data.meetingUrl ? {
                         action: {
                             label: 'Войти в комнату',
@@ -64,8 +71,8 @@ export const QueuePage = () => {
                         }
                     } : undefined);
                 }
-                if (data.status === 'COMPLETED') {
-                    toast.message('Встреча завершена');
+                if (data.status === 'CANCELLED') {
+                    toast.message('Встреча отменена');
                 }
             }
 
@@ -89,11 +96,16 @@ export const QueuePage = () => {
         } finally {
             setLoading(false);
         }
-    }, [lastStatus, wasOnline]);
+    }, [lastStatus, wasOnline, sessionId, navigate]);
 
     // Регистрация в очереди при первой загрузке (однократно/с троттлингом)
     useEffect(() => {
         const registerInQueue = async () => {
+            if (!sessionId) {
+                navigate('/login');
+                return;
+            }
+
             if (hasRegisteredRef.current || isRecentlyRegistered()) {
                 // уже отправляли запрос на регистрацию — не повторяем
                 hasRegisteredRef.current = true;
@@ -101,7 +113,7 @@ export const QueuePage = () => {
                 return;
             }
             try {
-                await axiosInstance.post("/api/queue/register");
+                await queueJoin(sessionId);
                 setLastRegisterTs();
                 hasRegisteredRef.current = true;
                 if (!registeredToastShown) {
@@ -126,7 +138,7 @@ export const QueuePage = () => {
         };
 
         void registerInQueue();
-    }, [fetchQueueStatus, registeredToastShown, isRecentlyRegistered]);
+    }, [fetchQueueStatus, registeredToastShown, isRecentlyRegistered, navigate, sessionId]);
 
     // Периодическое обновление статуса
     useEffect(() => {
@@ -154,11 +166,16 @@ export const QueuePage = () => {
 
     const handleManualRegister = async () => {
         try {
+            if (!sessionId) {
+                navigate('/login');
+                return;
+            }
+
             if (isRecentlyRegistered()) {
                 await fetchQueueStatus();
                 return;
             }
-            await axiosInstance.post("/api/queue/register");
+            await queueJoin(sessionId);
             setLastRegisterTs();
             toast.success('Вы зарегистрированы в очереди');
             await fetchQueueStatus();
@@ -187,14 +204,12 @@ export const QueuePage = () => {
         switch (status) {
             case 'WAITING':
                 return 'В ожидании';
-            case 'BUFFER':
+            case 'IN_BUFFER':
                 return 'Ваша очередь';
-            case 'ACTIVE':
-                return 'Ваша встреча началась';
-            case 'COMPLETED':
-                return 'Встреча завершена';
-            case 'NOT_IN_QUEUE':
-                return 'Не в очереди';
+            case 'SERVED':
+                return 'Встреча обслужена';
+            case 'CANCELLED':
+                return 'Встреча отменена';
             default:
                 return String(status);
         }
@@ -204,13 +219,13 @@ export const QueuePage = () => {
     const statusPillClasses = (status: QueueStatus | string) => {
         switch (status) {
             case 'WAITING':
-                return 'bg-blue-50 text-blue-600';
-            case 'BUFFER':
-                return 'bg-amber-50 text-amber-600';
-            case 'ACTIVE':
-                return 'bg-green-50 text-green-600';
-            case 'COMPLETED':
-                return 'bg-gray-100 text-gray-600';
+                return 'bg-blue-100 text-blue-700';
+            case 'IN_BUFFER':
+                return 'bg-orange-100 text-orange-700';
+            case 'SERVED':
+                return 'bg-green-100 text-green-700';
+            case 'CANCELLED':
+                return 'bg-red-100 text-red-700';
             default:
                 return 'bg-gray-100 text-gray-600';
         }
@@ -237,7 +252,7 @@ export const QueuePage = () => {
                     {isOnline ? 'Онлайн' : 'Офлайн - восстановление соединения...'}
                 </div>
 
-                {queueData && queueData.status !== 'NOT_IN_QUEUE' && (
+                {queueData && (
                     <>
                         <div className="mb-6 md:mb-8">
                             <div className="text-base sm:text-lg text-gray-600 mb-3 sm:mb-4">Ваш номер в очереди</div>
@@ -247,11 +262,11 @@ export const QueuePage = () => {
                             </div>
                         </div>
 
-                        {queueData.status === 'BUFFER' && queueData.meetingUrl && (
+                        {queueData.status === 'IN_BUFFER' && queueData.meetingUrl && (
                             <div className="bg-gradient-to-br from-amber-500 to-orange-500 text-white p-6 md:p-8 rounded-xl mb-5">
                                 <div className="text-4xl md:text-5xl mb-3 md:mb-4">🎉</div>
                                 <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Ваша очередь подошла!</h2>
-                                <p className="m-0 mb-4 md:mb-5 opacity-90">Через 5 минут начнется ваша встреча</p>
+                                <p className="m-0 mb-4 md:mb-5 opacity-90">Можете присоединиться к встрече</p>
                                 <a
                                     href={queueData.meetingUrl}
                                     className="bg-white text-amber-600 px-5 md:px-6 py-3 rounded-lg no-underline font-semibold inline-flex items-center gap-2 transition-transform duration-300 hover:-translate-y-0.5 shadow hover:shadow-lg"
@@ -263,7 +278,7 @@ export const QueuePage = () => {
                             </div>
                         )}
 
-                        {queueData.status === 'ACTIVE' && queueData.meetingUrl && (
+                        {queueData.status === 'SERVED' && queueData.meetingUrl && (
                             <div className="bg-gradient-to-br from-green-600 to-emerald-500 text-white p-6 md:p-8 rounded-xl mb-5">
                                 <div className="text-4xl md:text-5xl mb-3 md:mb-4">📹</div>
                                 <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Встреча началась!</h2>
@@ -290,7 +305,7 @@ export const QueuePage = () => {
                     </>
                 )}
 
-                {queueData && queueData.status === 'NOT_IN_QUEUE' && (
+                {!queueData && (
                     <div className="bg-gray-100 p-6 md:p-8 rounded-xl mb-5">
                         <p className="m-0 mb-4">Вы не зарегистрированы в очереди.</p>
                         <button onClick={handleManualRegister} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-medium">
