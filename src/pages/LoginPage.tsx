@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { getToken, setToken } from "../utils/tokenUtils";
+import {  setToken } from "../utils/tokenUtils";
 import { makeSessionId } from "../utils/session";
 
 import type { SignStatusResponse } from "../types/sign.t";
@@ -131,6 +131,7 @@ export const LoginPage = () => {
         }
 
         try {
+            localStorage.setItem("sessionId", String(sessionId));
             const response = await getEgovMobileUrl(String(sessionId));
             window.location.href = response.url;
         } catch (e) {
@@ -140,13 +141,13 @@ export const LoginPage = () => {
     };
 
     useEffect(() => {
+        const storedSessionId = localStorage.getItem("sessionId");
 
-        if (getToken() && !loading && sessionId) {
-            navigate("/queue?sessionId=" + sessionId);
-        } else {
-            localStorage.clear()
+        if (storedSessionId) {
+            localStorage.removeItem("sessionId");
+            navigate(`/queue?sessionId=${storedSessionId}`);
         }
-    }, [navigate, sessionId, loading]);
+    }, [navigate]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
