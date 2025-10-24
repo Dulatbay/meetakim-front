@@ -139,10 +139,13 @@ export const LoginPage = () => {
     };
 
     useEffect(() => {
-        if (getToken()) {
-            navigate("/queue");
+
+        if (getToken() && !loading && sessionId) {
+            navigate("/queue?sessionId=" + sessionId);
+        } else {
+            localStorage.clear()
         }
-    }, [navigate]);
+    }, [navigate, sessionId, loading]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
