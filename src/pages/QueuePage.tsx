@@ -3,7 +3,6 @@ import {useNavigate, useSearchParams} from 'react-router-dom';
 import axios from 'axios';
 import {toast} from 'sonner';
 import type {QueueStatus, PositionResponse} from '../types/queue.t';
-import {clearToken} from "../utils/tokenUtils.ts";
 import {queueJoin, fetchPosition} from "../api/endpoints/queue.ts";
 
 const POSITION_UPDATE_INTERVAL = 5000; // 5 секунд
@@ -160,7 +159,7 @@ export const QueuePage = () => {
 
     const handleLogout = () => {
         if (window.confirm('Вы уверены? При выходе вы потеряете место в очереди!')) {
-            clearToken();
+            localStorage.clear();
             navigate('/login');
         }
     };
