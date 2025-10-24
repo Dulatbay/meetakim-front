@@ -2,6 +2,7 @@ import {CallbackPage} from "./pages/CallbackPage.tsx";
 import {LoginPage} from "./pages/LoginPage.tsx";
 import {RequireAuth} from "./components/RequireAuth.tsx";
 import {QueuePage} from "./pages/QueuePage.tsx";
+import {AdminPage} from "./pages/AdminPage.tsx";
 import {Toaster} from "sonner";
 import {Navigate, Route, Routes} from "react-router-dom";
 
@@ -15,8 +16,15 @@ const App = () => {
                 <Route
                     path="/queue"
                     element={
-                        <RequireAuth>
                             <QueuePage/>
+                    }
+                />
+
+                <Route
+                    path="/admin"
+                    element={
+                        <RequireAuth>
+                            <AdminPage/>
                         </RequireAuth>
                     }
                 />
