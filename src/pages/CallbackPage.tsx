@@ -7,20 +7,17 @@ export const CallbackPage = () => {
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get("token");
+        const sessionId = localStorage.getItem("sessionId");
 
-        if (token) {
+        if (token && sessionId) {
             setToken(token);
-            
-            setTimeout(() => {
-                navigate("/queue?sessionId" + (localStorage.getItem("sessionId") ?? ""));
-                window.close();
-            }, 7000);
+            navigate(`/queue?sessionId=${sessionId}`);
+        } else if (sessionId) {
+            navigate(`/queue?sessionId=${sessionId}`);
         } else {
-            window.close();
+            navigate('/login');
         }
     }, [navigate]);
 
-    return <div>
-        {localStorage.getItem("sessionId") ?? "No session id"}
-        Завершаем авторизацию...</div>;
+    return <div>Завершаем авторизацию...</div>;
 };
