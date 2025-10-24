@@ -75,13 +75,14 @@ export const LoginPage = () => {
             try {
                 const session = await createSession(uuid);
                 setSessionId(session.id);
-
+                localStorage.setItem("sessionId", String(session.id));
                 const { imageUrl } = await fetchQr(String(session.id));
                 setBlobUrlSafely(imageUrl);
 
                 startPollingStatus(session.id);
             } catch (e) {
                 console.error(e);
+                localStorage.clear();
                 toast.error("Не удалось создать сессию. Попробуйте обновить страницу.");
             } finally {
                 if (mounted) setLoading(false);

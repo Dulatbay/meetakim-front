@@ -41,6 +41,7 @@ export const QueuePage = () => {
     const fetchQueueStatus = useCallback(async () => {
         try {
             if (!sessionId) {
+                localStorage.clear()
                 navigate('/login');
                 return;
             }
