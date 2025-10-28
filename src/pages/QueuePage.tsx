@@ -11,7 +11,7 @@ const QUEUE_REGISTER_TS_KEY = 'queue_register_ts';
 
 export const QueuePage = () => {
     const [searchParams] = useSearchParams();
-    const sessionId = searchParams.get('session');
+    const sessionId = searchParams.get('sessionId');
 
     const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
