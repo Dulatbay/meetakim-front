@@ -9,7 +9,39 @@ export interface QueueItem {
     createdAt: string;
     servedAt?: string | null;
     fullName?: string;
+    iin?: string;
 }
+
+export interface PageableResponse<T> {
+    content: T[];
+    pageable: {
+        pageNumber: number;
+        pageSize: number;
+        sort: {
+            empty: boolean;
+            sorted: boolean;
+            unsorted: boolean;
+        };
+        offset: number;
+        paged: boolean;
+        unpaged: boolean;
+    };
+    totalPages: number;
+    totalElements: number;
+    last: boolean;
+    size: number;
+    number: number;
+    sort: {
+        empty: boolean;
+        sorted: boolean;
+        unsorted: boolean;
+    };
+    numberOfElements: number;
+    first: boolean;
+    empty: boolean;
+}
+
+export type SortDirection = 'ASC' | 'DESC';
 
 export interface StatusChangeResponse {
     message: string;
@@ -45,4 +77,3 @@ export interface DeleteQueueResponse {
     message: string;
     queue: QueueItem;
 }
-
