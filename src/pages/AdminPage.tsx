@@ -35,7 +35,7 @@ export const AdminPage = () => {
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
     const [sortField, setSortField] = useState('sequenceNumber');
-    const [sortDirection, setSortDirection] = useState<SortDirection>('ASC');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
 
     // Detect screen size
     useEffect(() => {
