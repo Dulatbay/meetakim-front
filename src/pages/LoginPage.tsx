@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import {  setToken } from "../utils/tokenUtils";
-import { makeSessionId } from "../utils/session";
+import {useEffect, useRef, useState} from "react";
+import {useNavigate} from "react-router-dom";
+import {toast} from "sonner";
+import {setToken} from "../utils/tokenUtils";
+import {makeSessionId} from "../utils/session";
 
-import type { SignStatusResponse } from "../types/sign.t";
+import type {SignStatusResponse} from "../types/sign.t";
 import {createSession, fetchQr, getSignStatus, getEgovMobileUrl} from "../api/endpoints/sign.ts";
 
 export const LoginPage = () => {
@@ -14,9 +14,9 @@ export const LoginPage = () => {
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState<number | null>(null);
-
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentBlobUrlRef = useRef<string | null>(null);
+
 
     const setBlobUrlSafely = (url: string) => {
         if (currentBlobUrlRef.current) URL.revokeObjectURL(currentBlobUrlRef.current);
@@ -42,7 +42,7 @@ export const LoginPage = () => {
                 } else if (resp.state === "FAILED") {
                     toast.error("Авторизация отклонена в eGov Mobile");
                     stopPolling();
-                } // PENDING — просто ждём дальше
+                }
             } catch (e: unknown) {
                 const isAxiosError = typeof e === 'object' && e !== null && 'response' in e;
                 const status = isAxiosError ? (e as { response?: { status?: number } }).response?.status : undefined;
@@ -68,18 +68,29 @@ export const LoginPage = () => {
     };
 
     useEffect(() => {
+        const storedSessionId = localStorage.getItem("sessionId");
+        const isOk = !!(storedSessionId && !Number.isNaN(Number(storedSessionId)) && Number(storedSessionId) > 0);
+
+        if (isOk) {
+            setSessionId(Number(storedSessionId));
+        }
         let mounted = true;
 
         (async () => {
             setLoading(true);
             try {
-                const session = await createSession(uuid);
-                setSessionId(session.id);
-                localStorage.setItem("sessionId", String(session.id));
-                const { imageUrl } = await fetchQr(String(session.id));
+                let sessionId = isOk ? Number(storedSessionId) : null;
+                if (sessionId === null) {
+                    const session = await createSession(uuid);
+                    setSessionId(session.id);
+                    sessionId = session.id;
+                    localStorage.setItem("sessionId", String(session.id));
+                }
+
+                const {imageUrl} = await fetchQr(String(sessionId));
                 setBlobUrlSafely(imageUrl);
 
-                startPollingStatus(session.id);
+                startPollingStatus(sessionId);
             } catch (e) {
                 console.error(e);
                 localStorage.clear();
@@ -110,7 +121,7 @@ export const LoginPage = () => {
             const session = await createSession(newUuid);
             setSessionId(session.id);
 
-            const { imageUrl } = await fetchQr(String(session.id));
+            const {imageUrl} = await fetchQr(String(session.id));
             setBlobUrlSafely(imageUrl);
 
             startPollingStatus(session.id);
@@ -140,14 +151,6 @@ export const LoginPage = () => {
         }
     };
 
-    useEffect(() => {
-        const storedSessionId = localStorage.getItem("sessionId");
-
-        if (storedSessionId) {
-            localStorage.removeItem("sessionId");
-            navigate(`/queue?sessionId=${storedSessionId}`);
-        }
-    }, [navigate]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
@@ -169,7 +172,7 @@ export const LoginPage = () => {
                                 />
                             ) : (
                                 <svg className="w-full h-full" viewBox="0 0 200 200" aria-hidden>
-                                    <rect width="200" height="200" fill="#f0f0f0" />
+                                    <rect width="200" height="200" fill="#f0f0f0"/>
                                     <text x="50%" y="50%" textAnchor="middle" dy=".3em" fill="#999" fontSize="14">
                                         Загрузка QR…
                                     </text>
