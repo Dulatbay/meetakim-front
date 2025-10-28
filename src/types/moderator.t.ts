@@ -8,6 +8,7 @@ export interface QueueItem {
     meetingUrl: string | null;
     createdAt: string;
     servedAt?: string | null;
+    fullName?: string;
 }
 
 export interface StatusChangeResponse {

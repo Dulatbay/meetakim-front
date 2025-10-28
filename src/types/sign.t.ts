@@ -12,6 +12,8 @@ export type CreateSessionResponse = {
         password: string;
     } | null;
     createdAt: string;
+    signedData?: string[];
+    personCertInfo?: PersonCertInfo | null;
 };
 
 export type SignInitResponse = {
@@ -33,6 +35,23 @@ export type SignCallbackResponse = {
     signedDocument?: string;
 };
 
+export type PersonCertSubject = {
+    id: number;
+    commonName: string;
+    surName: string;
+    iin: string;
+    country: string;
+    dn: string;
+};
+
+export type PersonCertInfo = {
+    id: number;
+    valid: boolean;
+    subject: PersonCertSubject;
+    notBefore: string; // ISO date
+    notAfter: string; // ISO date
+};
+
 export type SignStatusResponse = {
     id: number;
     sessionUuid: string;
@@ -47,4 +66,6 @@ export type SignStatusResponse = {
         password: string;
     } | null;
     createdAt: string;
+    signedData?: string[];
+    personCertInfo?: PersonCertInfo | null;
 };

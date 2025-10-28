@@ -10,6 +10,8 @@ import {
     bulkUpdateStatus,
     deleteQueue
 } from '../api/endpoints/moderator';
+import { getSignStatus } from '../api/endpoints/sign';
+import type { SignStatusResponse } from '../types/sign.t';
 
 const REFRESH_INTERVAL = 5000; // 5 секунд
 
@@ -24,6 +26,7 @@ export const AdminPage = () => {
     const [bulkFrom, setBulkFrom] = useState('');
     const [bulkTo, setBulkTo] = useState('');
     const [bulkStatus, setBulkStatus] = useState<QueueStatus>('SERVED');
+    const [personNames, setPersonNames] = useState<Record<number, string>>({});
 
     const loadData = useCallback(async () => {
         try {
@@ -50,12 +53,54 @@ export const AdminPage = () => {
         return () => clearInterval(interval);
     }, [loadData]);
 
+    // Fetch missing names for queues without fullName and not yet cached
+    useEffect(() => {
+        const controller = new AbortController();
+        const run = async () => {
+            const missing = queues
+                .filter(q => !q.fullName && !personNames[q.sessionId])
+                .map(q => q.sessionId);
+            if (missing.length === 0) return;
+
+            try {
+                // Limit concurrency to avoid spamming backend
+                const batch = missing.slice(0, 20);
+                const results = await Promise.all(
+                    batch.map(async (sid) => {
+                        try {
+                            const resp: SignStatusResponse = await getSignStatus(String(sid));
+                            const nameFromUser = resp.user?.fullName?.trim();
+                            const nameFromCert = `${resp.personCertInfo?.subject?.surName ?? ''} ${resp.personCertInfo?.subject?.commonName ?? ''}`.trim();
+                            const name = nameFromUser || nameFromCert || '';
+                            return { sid, name } as const;
+                        } catch {
+                            return { sid, name: '' } as const;
+                        }
+                    })
+                );
+
+                const updates: Record<number, string> = {};
+                for (const r of results) {
+                    if (r.name) updates[r.sid] = r.name;
+                }
+                if (Object.keys(updates).length > 0) {
+                    setPersonNames(prev => ({ ...prev, ...updates }));
+                }
+            } catch (e) {
+                console.warn('Не удалось получить ФИО по сессиям:', e);
+            }
+        };
+        void run();
+        return () => controller.abort();
+    }, [queues, personNames]);
+
     const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
         try {
             await updateQueueStatus(id, newStatus);
             toast.success('Статус изменен');
             await loadData();
         } catch (error) {
+            console.error('Ошибка изменения статуса:', error);
             toast.error('Ошибка изменения статуса');
         }
     };
@@ -72,6 +117,7 @@ export const AdminPage = () => {
             setNewUrl('');
             await loadData();
         } catch (error) {
+            console.error('Ошибка обновления URL:', error);
             toast.error('Ошибка обновления URL');
         }
     };
@@ -92,6 +138,7 @@ export const AdminPage = () => {
             setBulkTo('');
             await loadData();
         } catch (error) {
+            console.error('Ошибка массового обновления:', error);
             toast.error('Ошибка массового обновления');
         }
     };
@@ -105,6 +152,7 @@ export const AdminPage = () => {
             toast.success('Очередь отменена');
             await loadData();
         } catch (error) {
+            console.error('Ошибка отмены очереди:', error);
             toast.error('Ошибка отмены очереди');
         }
     };
@@ -303,6 +351,9 @@ export const AdminPage = () => {
                                         ID Сессии
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        ФИО
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Статус
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -319,117 +370,125 @@ export const AdminPage = () => {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {queues.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                                        <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                                             Нет данных
                                         </td>
                                     </tr>
                                 ) : (
-                                    queues.map((queue) => (
-                                        <tr key={queue.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">
-                                                    {queue.sequenceNumber}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{queue.sessionId}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                                                        queue.status
-                                                    )}`}
-                                                >
-                                                    {getStatusText(queue.status)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {editingUrl === queue.id ? (
-                                                    <div className="flex gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={newUrl}
-                                                            onChange={(e) => setNewUrl(e.target.value)}
-                                                            placeholder="https://..."
-                                                            className="border border-gray-300 rounded px-2 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                        <button
-                                                            onClick={() => handleUrlUpdate(queue.id)}
-                                                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
-                                                        >
-                                                            ✓
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingUrl(null);
-                                                                setNewUrl('');
-                                                            }}
-                                                            className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
-                                                        >
-                                                            ✕
-                                                        </button>
+                                    queues.map((queue) => {
+                                        const displayName = queue.fullName || personNames[queue.sessionId] || '—';
+                                        return (
+                                            <tr key={queue.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">
+                                                        {queue.sequenceNumber}
                                                     </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        {queue.meetingUrl ? (
-                                                            <a
-                                                                href={queue.meetingUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-indigo-600 hover:text-indigo-900 text-sm truncate max-w-xs"
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{queue.sessionId}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900 truncate max-w-[220px]" title={displayName}>
+                                                        {displayName}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                                                            queue.status
+                                                        )}`}
+                                                    >
+                                                        {getStatusText(queue.status)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {editingUrl === queue.id ? (
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={newUrl}
+                                                                onChange={(e) => setNewUrl(e.target.value)}
+                                                                placeholder="https://..."
+                                                                className="border border-gray-300 rounded px-2 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                            />
+                                                            <button
+                                                                onClick={() => handleUrlUpdate(queue.id)}
+                                                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
                                                             >
-                                                                {queue.meetingUrl}
-                                                            </a>
-                                                        ) : (
-                                                            <span className="text-gray-400 text-sm">Нет URL</span>
-                                                        )}
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingUrl(queue.id);
-                                                                setNewUrl(queue.meetingUrl || '');
-                                                            }}
-                                                            className="text-gray-500 hover:text-gray-700 text-sm"
-                                                        >
-                                                            ✏️
-                                                        </button>
+                                                                ✓
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingUrl(null);
+                                                                    setNewUrl('');
+                                                                }}
+                                                                className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            {queue.meetingUrl ? (
+                                                                <a
+                                                                    href={queue.meetingUrl}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-indigo-600 hover:text-indigo-900 text-sm truncate max-w-xs"
+                                                                >
+                                                                    {queue.meetingUrl}
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-gray-400 text-sm">Нет URL</span>
+                                                            )}
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingUrl(queue.id);
+                                                                    setNewUrl(queue.meetingUrl || '');
+                                                                }}
+                                                                className="text-gray-500 hover:text-gray-700 text-sm"
+                                                            >
+                                                                ✏️
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-500">
+                                                        {new Date(queue.createdAt).toLocaleString('ru-RU')}
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-500">
-                                                    {new Date(queue.createdAt).toLocaleString('ru-RU')}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <div className="flex flex-col gap-1">
-                                                    {queue.status === 'WAITING' && (
-                                                        <button
-                                                            onClick={() => handleStatusChange(queue.id, 'IN_BUFFER')}
-                                                            className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs"
-                                                        >
-                                                            В буфер
-                                                        </button>
-                                                    )}
-                                                    {queue.status === 'IN_BUFFER' && (
-                                                        <button
-                                                            onClick={() => handleStatusChange(queue.id, 'SERVED')}
-                                                            className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs"
-                                                        >
-                                                            Обслужен
-                                                        </button>
-                                                    )}
-                                                    {queue.status !== 'CANCELLED' && queue.status !== 'SERVED' && (
-                                                        <button
-                                                            onClick={() => handleDelete(queue.id)}
-                                                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
-                                                        >
-                                                            Отменить
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <div className="flex flex-col gap-1">
+                                                        {queue.status === 'WAITING' && (
+                                                            <button
+                                                                onClick={() => handleStatusChange(queue.id, 'IN_BUFFER')}
+                                                                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs"
+                                                            >
+                                                                В буфер
+                                                            </button>
+                                                        )}
+                                                        {queue.status === 'IN_BUFFER' && (
+                                                            <button
+                                                                onClick={() => handleStatusChange(queue.id, 'SERVED')}
+                                                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs"
+                                                            >
+                                                                Обслужен
+                                                            </button>
+                                                        )}
+                                                        {queue.status !== 'CANCELLED' && queue.status !== 'SERVED' && (
+                                                            <button
+                                                                onClick={() => handleDelete(queue.id)}
+                                                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
+                                                            >
+                                                                Отменить
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
@@ -444,4 +503,3 @@ export const AdminPage = () => {
         </div>
     );
 };
-
