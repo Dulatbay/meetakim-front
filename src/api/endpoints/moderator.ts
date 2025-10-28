@@ -6,16 +6,36 @@ import type {
     BulkStatusUpdateResponse,
     QueueStats,
     DeleteQueueResponse,
-    QueueStatus
+    QueueStatus,
+    PageableResponse,
+    SortDirection
 } from "../../types/moderator.t";
 
 const BASE_PATH = '/api/citizen-moderator';
 
-// Получить список всех очередей
-export const fetchQueues = async (status?: QueueStatus): Promise<QueueItem[]> => {
-    const {data} = await axiosInstance.get<QueueItem[]>(`${BASE_PATH}/queues`, {
-        params: status ? {status} : undefined,
+// Получить список всех очередей с пагинацией
+export const fetchQueues = async (
+    status?: QueueStatus,
+    page: number = 0,
+    size: number = 20,
+    sort: string = 'sequenceNumber',
+    direction: SortDirection = 'ASC'
+): Promise<PageableResponse<QueueItem>> => {
+    const params: Record<string, string | number> = {
+        page,
+        size,
+        sort,
+        direction
+    };
+
+    if (status) {
+        params.status = status;
+    }
+
+    const {data} = await axiosInstance.get<PageableResponse<QueueItem>>(`${BASE_PATH}/queues`, {
+        params
     });
+
     return data;
 };
 
@@ -76,4 +96,3 @@ export const deleteQueue = async (id: number): Promise<DeleteQueueResponse> => {
     const {data} = await axiosInstance.delete<DeleteQueueResponse>(`${BASE_PATH}/queue/${id}`);
     return data;
 };
-
