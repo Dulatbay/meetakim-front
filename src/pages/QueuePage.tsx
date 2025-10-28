@@ -56,7 +56,7 @@ export const QueuePage = () => {
             // Status change toasts (skip first undefined -> X change)
             if (lastStatus && data?.status && lastStatus !== data.status) {
                 if (data.status === 'IN_BUFFER') {
-                    toast.info('Ваша очередь скоро подойдет!', data.meetingUrl ? {
+                    toast.info('Ваша очередь подошла!', data.meetingUrl ? {
                         action: {
                             label: 'Перейти к встрече',
                             onClick: () => window.open(data.meetingUrl!, '_blank', 'noopener,noreferrer')
@@ -64,12 +64,7 @@ export const QueuePage = () => {
                     } : undefined);
                 }
                 if (data.status === 'SERVED') {
-                    toast.success('Ваша встреча началась', data.meetingUrl ? {
-                        action: {
-                            label: 'Войти в комнату',
-                            onClick: () => window.open(data.meetingUrl!, '_blank', 'noopener,noreferrer')
-                        }
-                    } : undefined);
+                    toast.success('Встреча завершена');
                 }
                 if (data.status === 'CANCELLED') {
                     toast.message('Встреча отменена');
@@ -207,7 +202,7 @@ export const QueuePage = () => {
             case 'IN_BUFFER':
                 return 'Ваша очередь';
             case 'SERVED':
-                return 'Встреча обслужена';
+                return 'Встреча завершена';
             case 'CANCELLED':
                 return 'Встреча отменена';
             default:
@@ -278,18 +273,11 @@ export const QueuePage = () => {
                             </div>
                         )}
 
-                        {queueData.status === 'SERVED' && queueData.meetingUrl && (
+                        {queueData.status === 'SERVED' && (
                             <div className="bg-gradient-to-br from-green-600 to-emerald-500 text-white p-6 md:p-8 rounded-xl mb-5">
-                                <div className="text-4xl md:text-5xl mb-3 md:mb-4">📹</div>
-                                <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Встреча началась!</h2>
-                                <a
-                                    href={queueData.meetingUrl}
-                                    className="bg-white text-green-600 px-6 md:px-8 py-3 md:py-4 rounded-lg no-underline font-semibold inline-flex items-center gap-2 text-base md:text-lg transition-transform duration-300 hover:-translate-y-0.5 shadow hover:shadow-lg"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    Войти в комнату
-                                </a>
+                                <div className="text-4xl md:text-5xl mb-3 md:mb-4">✅</div>
+                                <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Встреча завершена</h2>
+                                <p className="m-0 opacity-90">Спасибо за участие!</p>
                             </div>
                         )}
 
