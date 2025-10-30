@@ -96,7 +96,7 @@ export const LoginPage = () => {
                 const {imageUrl} = await fetchQr(String(session.id));
                 setBlobUrlSafely(imageUrl);
 
-                startQrAutoRefresh(session.id);
+                startQrAutoRefresh();
                 startPollingStatus(session.id);
             } catch (e) {
                 console.error(e);
@@ -119,11 +119,21 @@ export const LoginPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [uuid, phoneNumber]);
 
-    const refreshQr = async (id: number, showToast = false) => {
-        console.debug("Refreshing QR for session:", id);
+    const refreshQrWithNewSession = async (showToast = false) => {
+        console.debug("Refreshing QR with new session");
+        stopAllTimers();
+        
         try {
-            const {imageUrl} = await fetchQr(String(id));
+            const newUuid = makeSessionId();
+            const session = await createSession(newUuid, phoneNumber);
+            setSessionId(session.id);
+
+            const {imageUrl} = await fetchQr(String(session.id));
             setBlobUrlSafely(imageUrl);
+
+            startPollingStatus(session.id);
+            startQrAutoRefresh();
+
             if (showToast) {
                 toast.success("QR обновлён");
             }
@@ -135,39 +145,23 @@ export const LoginPage = () => {
         }
     };
 
-    const startQrAutoRefresh = (id: number) => {
-        console.debug("Starting QR auto-refresh for session:", id);
+    const startQrAutoRefresh = () => {
+        console.debug("Starting QR auto-refresh");
         if (qrRefreshTimerRef.current) {
             console.debug("QR refresh timer already running");
             return;
         }
         console.debug("QR refresh timer not yet initialized, creating...");
         qrRefreshTimerRef.current = setInterval(() => {
-            console.debug("Auto-refreshing QR...");
-            void refreshQr(id, true);
+            console.debug("Auto-refreshing QR with new session...");
+            void refreshQrWithNewSession(true);
         }, 30000);
     };
 
     const handleManualRefresh = async () => {
-        stopAllTimers();
-
         setLoading(true);
         try {
-            const newUuid = makeSessionId();
-
-            const session = await createSession(newUuid, phoneNumber);
-            setSessionId(session.id);
-
-            const {imageUrl} = await fetchQr(String(session.id));
-            setBlobUrlSafely(imageUrl);
-
-            startPollingStatus(session.id);
-            startQrAutoRefresh(session.id);
-
-            toast.success("QR обновлён");
-        } catch (e) {
-            console.error(e);
-            toast.error("Не удалось обновить QR. Попробуйте ещё раз.");
+            await refreshQrWithNewSession(true);
         } finally {
             setLoading(false);
         }
