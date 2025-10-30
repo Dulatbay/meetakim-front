@@ -10,6 +10,7 @@ export interface QueueItem {
     servedAt?: string | null;
     fullName?: string;
     iin?: string;
+    phoneNumber?: string;
 }
 
 export interface PageableResponse<T> {
