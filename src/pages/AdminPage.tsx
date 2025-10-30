@@ -10,8 +10,6 @@ import {
     bulkUpdateStatus,
     deleteQueue
 } from '../api/endpoints/moderator';
-import {getSignStatus} from '../api/endpoints/sign';
-import type {SignStatusResponse} from '../types/sign.t';
 import {clearAdminAuth} from '../utils/tokenUtils';
 
 const REFRESH_INTERVAL = 5000; // 5 секунд
@@ -27,7 +25,6 @@ export const AdminPage = () => {
     const [bulkFrom, setBulkFrom] = useState('');
     const [bulkTo, setBulkTo] = useState('');
     const [bulkStatus, setBulkStatus] = useState<QueueStatus>('SERVED');
-    const [personNames, setPersonNames] = useState<Record<number, string>>({});
     const [isMobileView, setIsMobileView] = useState(false);
 
     // Pagination state
@@ -88,46 +85,6 @@ export const AdminPage = () => {
     useEffect(() => {
         setCurrentPage(0);
     }, [filterStatus]);
-
-    useEffect(() => {
-        const controller = new AbortController();
-        const run = async () => {
-            const missing = queues
-                .filter(q => !q.fullName && !personNames[q.sessionId])
-                .map(q => q.sessionId);
-            if (missing.length === 0) return;
-
-            try {
-                // Limit concurrency to avoid spamming backend
-                const batch = missing.slice(0, 20);
-                const results = await Promise.all(
-                    batch.map(async (sid) => {
-                        try {
-                            const resp: SignStatusResponse = await getSignStatus(String(sid));
-                            const nameFromUser = resp.user?.fullName?.trim();
-                            const nameFromCert = `${resp.personCertInfo?.subject?.surName ?? ''} ${resp.personCertInfo?.subject?.commonName ?? ''}`.trim();
-                            const name = nameFromUser || nameFromCert || '';
-                            return {sid, name} as const;
-                        } catch {
-                            return {sid, name: ''} as const;
-                        }
-                    })
-                );
-
-                const updates: Record<number, string> = {};
-                for (const r of results) {
-                    if (r.name) updates[r.sid] = r.name;
-                }
-                if (Object.keys(updates).length > 0) {
-                    setPersonNames(prev => ({...prev, ...updates}));
-                }
-            } catch (e) {
-                console.warn('Не удалось получить ФИО по сессиям:', e);
-            }
-        };
-        void run();
-        return () => controller.abort();
-    }, [queues, personNames]);
 
     const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
         try {
@@ -395,7 +352,7 @@ export const AdminPage = () => {
                                 <div className="p-6 text-center text-gray-500">Нет данных</div>
                             ) : (
                                 queues.map((queue) => {
-                                    const displayName = queue.fullName || personNames[queue.sessionId] || '—';
+                                    const displayName = queue.fullName || '—';
                                     return (
                                         <div key={queue.id} className="p-4 space-y-3">
                                             {/* Header Row */}
@@ -610,7 +567,7 @@ export const AdminPage = () => {
                                     </tr>
                                 ) : (
                                     queues.map((queue) => {
-                                        const displayName = queue.fullName || personNames[queue.sessionId] || '—';
+                                        const displayName = queue.fullName || '—';
                                         return (
                                             <tr key={queue.id} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 whitespace-nowrap">
