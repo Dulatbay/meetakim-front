@@ -7,9 +7,9 @@ import type {
     SignStatusResponse
 } from "../../types/sign.t.ts";
 
-export const createSession = async (uuid: string): Promise<CreateSessionResponse> => {
+export const createSession = async (uuid: string, phoneNumber: string): Promise<CreateSessionResponse> => {
     const {data} = await axiosInstance.get<CreateSessionResponse>(`/api/sign/create_session`, {
-        params: {uuid},
+        params: { uuid, phoneNumber },
     });
     return data;
 };
@@ -38,6 +38,21 @@ export const initSign = async (sessionId: string): Promise<SignInitResponse> => 
 };
 
 export const getSignStatus = async (sessionId: string): Promise<SignStatusResponse> => {
+    try {
+        if (typeof window !== 'undefined') {
+            const pathname = window.location?.pathname || '';
+            const allowlist = ['/login', '/admin'];
+            if (!allowlist.some(p => pathname.startsWith(p))) {
+                // Диагностический лог — покажет откуда вызван
+                console.debug('[getSignStatus] blocked call', { sessionId, pathname, stack: new Error().stack });
+                return Promise.reject(new Error(`getSignStatus blocked on path ${pathname}`));
+            }
+        }
+    } catch (e) {
+        // не ломаем поведение в случае ошибки в диагностике
+        console.warn('[getSignStatus] diagnostic check failed', e);
+    }
+
     const {data} = await axiosInstance.get<SignStatusResponse>(`/api/sign/status`, {
         params: {sessionId: Number(sessionId)},
     });
