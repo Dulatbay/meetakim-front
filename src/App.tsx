@@ -23,6 +23,13 @@ const App = () => {
                 />
 
                 <Route
+                    path="/completed"
+                    element={
+                        <>COMPLETED, this page soon will be ready</>
+                    }
+                />
+
+                <Route
                     path="/admin"
                     element={
                         <RequireAuth>
