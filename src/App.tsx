@@ -4,6 +4,7 @@ import {PhoneInputPage} from "./pages/PhoneInputPage.tsx";
 import {RequireAuth} from "./components/RequireAuth.tsx";
 import {QueuePage} from "./pages/QueuePage.tsx";
 import {AdminPage} from "./pages/AdminPage.tsx";
+import {CompletedPage} from "./pages/CompletedPage.tsx";
 import {Toaster} from "sonner";
 import {Route, Routes} from "react-router-dom";
 
@@ -24,9 +25,7 @@ const App = () => {
 
                 <Route
                     path="/completed"
-                    element={
-                        <>COMPLETED, this page soon will be ready</>
-                    }
+                    element={<CompletedPage/>}
                 />
 
                 <Route
