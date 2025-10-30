@@ -8,6 +8,22 @@ export const clearToken = () => {
     localStorage.removeItem("jwt_token");
 };
 
+// Admin auth functions
+export const setAdminAuth = (username: string, password: string) => {
+    const credentials = btoa(`${username}:${password}`);
+    localStorage.setItem("admin_auth", credentials);
+};
+
+export const getAdminAuth = () => localStorage.getItem("admin_auth");
+
+export const clearAdminAuth = () => {
+    localStorage.removeItem("admin_auth");
+};
+
+export const isAdminAuthenticated = (): boolean => {
+    return !!getAdminAuth();
+};
+
 export const isAuthenticated = (): boolean => {
     const token = getToken();
     if (!token) {

@@ -1,7 +1,7 @@
 import axios from "axios";
-import {getToken} from "../utils/tokenUtils.ts";
+import {getToken, getAdminAuth} from "../utils/tokenUtils.ts";
 
-const BASE_URL = "https://meet-akim.kz"; // http://localhost:8080
+const BASE_URL = "http://localhost:8080"; // http://localhost:8080
 
 const axiosInstance = axios.create({
     baseURL: BASE_URL,
@@ -12,9 +12,16 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
     (config) => {
-        const token = getToken();
-        if (token) {
-            config.headers['Authorization'] = `Basic ${btoa('admin:admin123')}`;
+        // Проверяем, есть ли admin auth (для модераторских эндпоинтов)
+        const adminAuth = getAdminAuth();
+        if (adminAuth) {
+            config.headers['Authorization'] = `Basic ${adminAuth}`;
+        } else {
+            // Если нет admin auth, используем обычный токен
+            const token = getToken();
+            if (token) {
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
         }
         return config;
     },

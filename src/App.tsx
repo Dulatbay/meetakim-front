@@ -1,5 +1,6 @@
 import {CallbackPage} from "./pages/CallbackPage.tsx";
 import {LoginPage} from "./pages/LoginPage.tsx";
+import {AdminLoginPage} from "./pages/AdminLoginPage.tsx";
 import {RequireAuth} from "./components/RequireAuth.tsx";
 import {QueuePage} from "./pages/QueuePage.tsx";
 import {AdminPage} from "./pages/AdminPage.tsx";
@@ -12,6 +13,7 @@ const App = () => {
             <Routes>
                 <Route path="/login" element={<LoginPage/>}/>
                 <Route path="/auth/callback" element={<CallbackPage/>}/>
+                <Route path="/admin/login" element={<AdminLoginPage/>}/>
 
                 <Route
                     path="/queue"

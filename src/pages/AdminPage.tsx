@@ -12,6 +12,7 @@ import {
 } from '../api/endpoints/moderator';
 import {getSignStatus} from '../api/endpoints/sign';
 import type {SignStatusResponse} from '../types/sign.t';
+import {clearAdminAuth} from '../utils/tokenUtils';
 
 const REFRESH_INTERVAL = 5000; // 5 секунд
 
@@ -201,8 +202,8 @@ export const AdminPage = () => {
     };
 
     const handleLogout = () => {
-        localStorage.clear();
-        navigate('/login');
+        clearAdminAuth();
+        navigate('/admin/login');
     };
 
     const getStatusText = (status: QueueStatus) => {
