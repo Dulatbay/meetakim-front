@@ -9,7 +9,7 @@ const POSITION_UPDATE_INTERVAL = 5000; // 5 секунд
 
 export const QueuePage = () => {
     const [searchParams] = useSearchParams();
-    const sessionId = searchParams.get('sessionId')
+    const sessionId = searchParams.get('sessionId') ?? searchParams.get('sessionid')
 
     const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -25,6 +25,7 @@ export const QueuePage = () => {
     const fetchQueueStatus = useCallback(async () => {
         try {
             if (!sessionId) {
+                toast.error("Перенаправление на регистрацию")
                 navigate('/login');
                 return;
             }
