@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { setAdminAuth } from '../utils/tokenUtils';
-import axiosInstance from '../api/axiosInstance';
+import {axiosInstance} from '../api/axiosInstance';
 
 export const AdminLoginPage = () => {
     const navigate = useNavigate();
@@ -10,8 +10,7 @@ export const AdminLoginPage = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async () => {
 
         if (!username.trim() || !password.trim()) {
             toast.error('Введите логин и пароль');
@@ -74,7 +73,7 @@ export const AdminLoginPage = () => {
                     <p className="text-gray-600">Войдите для доступа к модерации</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-6">
                     <div>
                         <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
                             Логин
@@ -106,7 +105,7 @@ export const AdminLoginPage = () => {
                     </div>
 
                     <button
-                        type="submit"
+                        onClick={handleSubmit}
                         disabled={loading}
                         className={`w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors ${
                             loading ? 'opacity-50 cursor-not-allowed' : ''
@@ -121,7 +120,7 @@ export const AdminLoginPage = () => {
                             'Войти'
                         )}
                     </button>
-                </form>
+                </div>
 
                 <div className="mt-6 text-center">
                     <button

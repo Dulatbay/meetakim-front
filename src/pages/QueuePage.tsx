@@ -6,12 +6,10 @@ import type {QueueStatus, PositionResponse} from '../types/queue.t';
 import {queueJoin, fetchPosition} from "../api/endpoints/queue.ts";
 
 const POSITION_UPDATE_INTERVAL = 5000; // 5 секунд
-const REGISTER_THROTTLE_MS = 60_000; // 60 секунд
-const QUEUE_REGISTER_TS_KEY = 'queue_register_ts';
 
 export const QueuePage = () => {
     const [searchParams] = useSearchParams();
-    const sessionId = searchParams.get('sessionId');
+    const sessionId = searchParams.get('sessionid')
 
     const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -23,24 +21,10 @@ export const QueuePage = () => {
     const navigate = useNavigate();
     const hasRegisteredRef = useRef(false);
 
-    const getLastRegisterTs = useCallback((): number | null => {
-        const v = localStorage.getItem(QUEUE_REGISTER_TS_KEY);
-        if (!v) return null;
-        const n = Number(v);
-        return Number.isFinite(n) ? n : null;
-    }, []);
-    const setLastRegisterTs = (ts: number = Date.now()) => {
-        localStorage.setItem(QUEUE_REGISTER_TS_KEY, String(ts));
-    };
-    const isRecentlyRegistered = useCallback(() => {
-        const ts = getLastRegisterTs();
-        return ts !== null && Date.now() - ts < REGISTER_THROTTLE_MS;
-    }, [getLastRegisterTs]);
 
     const fetchQueueStatus = useCallback(async () => {
         try {
             if (!sessionId) {
-                localStorage.clear()
                 navigate('/login');
                 return;
             }
@@ -101,7 +85,7 @@ export const QueuePage = () => {
                 return;
             }
 
-            if (hasRegisteredRef.current || isRecentlyRegistered()) {
+            if (hasRegisteredRef.current) {
                 // уже отправляли запрос на регистрацию — не повторяем
                 hasRegisteredRef.current = true;
                 await fetchQueueStatus();
@@ -109,7 +93,6 @@ export const QueuePage = () => {
             }
             try {
                 await queueJoin(sessionId);
-                setLastRegisterTs();
                 hasRegisteredRef.current = true;
                 if (!registeredToastShown) {
                     toast.success('Вы зарегистрированы в очереди');
@@ -121,10 +104,7 @@ export const QueuePage = () => {
                     if (error.response?.status === 401) {
                         return;
                     }
-                    // If backend says already registered (e.g., 409), set throttle flag
-                    if (error.response && [400, 409, 429].includes(error.response.status)) {
-                        setLastRegisterTs();
-                    }
+
                 }
                 // Если уже зарегистрирован или другая ошибка, просто получаем статус
                 hasRegisteredRef.current = true; // считаем, что регистрация уже была
@@ -133,7 +113,7 @@ export const QueuePage = () => {
         };
 
         void registerInQueue();
-    }, [fetchQueueStatus, registeredToastShown, isRecentlyRegistered, navigate, sessionId]);
+    }, [fetchQueueStatus, registeredToastShown, navigate, sessionId]);
 
     // Периодическое обновление статуса
     useEffect(() => {
@@ -154,7 +134,6 @@ export const QueuePage = () => {
 
     const handleLogout = () => {
         if (window.confirm('Вы уверены? При выходе вы потеряете место в очереди!')) {
-            localStorage.clear();
             navigate('/login');
         }
     };
@@ -166,12 +145,11 @@ export const QueuePage = () => {
                 return;
             }
 
-            if (isRecentlyRegistered()) {
+            if (hasRegisteredRef.current) {
                 await fetchQueueStatus();
                 return;
             }
             await queueJoin(sessionId);
-            setLastRegisterTs();
             toast.success('Вы зарегистрированы в очереди');
             await fetchQueueStatus();
         } catch (error) {

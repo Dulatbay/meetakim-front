@@ -8,6 +8,9 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn" // or "off"
+    },
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,

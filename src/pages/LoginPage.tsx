@@ -83,7 +83,6 @@ export const LoginPage = () => {
             try {
                 const session = await createSession(uuid, phoneNumber);
                 setSessionId(session.id);
-                localStorage.setItem("sessionId", String(session.id));
                 const {imageUrl} = await fetchQr(String(session.id));
                 setBlobUrlSafely(imageUrl);
 
@@ -100,6 +99,7 @@ export const LoginPage = () => {
         return () => {
             mounted = false;
             stopAllTimers();
+            localStorage.clear();
             if (currentBlobUrlRef.current) {
                 URL.revokeObjectURL(currentBlobUrlRef.current);
                 currentBlobUrlRef.current = null;
@@ -139,7 +139,6 @@ export const LoginPage = () => {
         }
 
         try {
-            localStorage.setItem("sessionId", String(sessionId));
             const response = await getEgovMobileUrl(String(sessionId));
             window.location.href = response.url;
         } catch (e) {
@@ -147,15 +146,6 @@ export const LoginPage = () => {
             toast.error("Не удалось получить ссылку для входа");
         }
     };
-
-    useEffect(() => {
-        const storedSessionId = localStorage.getItem("sessionId");
-
-        if (storedSessionId) {
-            localStorage.removeItem("sessionId");
-            navigate(`/queue?sessionId=${storedSessionId}`);
-        }
-    }, [navigate]);
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">

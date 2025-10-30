@@ -1,4 +1,4 @@
-import axiosInstance from "../axiosInstance.ts";
+import {axiosInstance} from "../axiosInstance.ts";
 import type {JoinQueueResponse, PositionResponse} from "../../types/queue.t.ts";
 
 export const queueJoin = async (sessionId: string): Promise<JoinQueueResponse> => {
