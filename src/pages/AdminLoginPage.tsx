@@ -85,7 +85,6 @@ export const AdminLoginPage = () => {
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                            placeholder="admin"
                             disabled={loading}
                             autoComplete="username"
                         />
@@ -101,7 +100,6 @@ export const AdminLoginPage = () => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                            placeholder="••••••••"
                             disabled={loading}
                             autoComplete="current-password"
                         />

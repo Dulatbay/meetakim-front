@@ -1,4 +1,3 @@
-import {CallbackPage} from "./pages/CallbackPage.tsx";
 import {LoginPage} from "./pages/LoginPage.tsx";
 import {AdminLoginPage} from "./pages/AdminLoginPage.tsx";
 import {RequireAuth} from "./components/RequireAuth.tsx";
@@ -12,7 +11,6 @@ const App = () => {
         <>
             <Routes>
                 <Route path="/login" element={<LoginPage/>}/>
-                <Route path="/auth/callback" element={<CallbackPage/>}/>
                 <Route path="/admin/login" element={<AdminLoginPage/>}/>
 
                 <Route
