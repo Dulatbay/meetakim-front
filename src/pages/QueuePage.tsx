@@ -9,7 +9,7 @@ const POSITION_UPDATE_INTERVAL = 5000; // 5 секунд
 
 export const QueuePage = () => {
     const [searchParams] = useSearchParams();
-    const sessionId = searchParams.get('sessionid')
+    const sessionId = searchParams.get('sessionId')
 
     const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
