@@ -425,6 +425,10 @@ export const AdminPage = () => {
                                                     <span className="text-gray-900">{queue.iin || '—'}</span>
                                                 </div>
                                                 <div>
+                                                    <span className="text-gray-500">Телефон:</span>{' '}
+                                                    <span className="text-gray-900">{queue.phoneNumber || '—'}</span>
+                                                </div>
+                                                <div>
                                                     <span className="text-gray-500">ID Сессии:</span>{' '}
                                                     <span className="text-gray-900">{queue.sessionId}</span>
                                                 </div>
@@ -556,6 +560,9 @@ export const AdminPage = () => {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         ИИН
                                     </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Телефон
+                                    </th>
                                     <th
                                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                                         onClick={() => {
@@ -597,7 +604,7 @@ export const AdminPage = () => {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                 {!queues || queues.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                                        <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
                                             Нет данных
                                         </td>
                                     </tr>
@@ -623,6 +630,11 @@ export const AdminPage = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm text-gray-900">
                                                         {queue.iin || '—'}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">
+                                                        {queue.phoneNumber || '—'}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
