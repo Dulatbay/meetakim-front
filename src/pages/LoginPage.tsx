@@ -155,7 +155,7 @@ export const LoginPage = () => {
         qrRefreshTimerRef.current = setInterval(() => {
             console.debug("Auto-refreshing QR with new session...");
             void refreshQrWithNewSession(true);
-        }, 30000);
+        }, 60000);
     };
 
     const handleManualRefresh = async () => {
