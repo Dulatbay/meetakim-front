@@ -77,6 +77,7 @@ export const LoginPage = () => {
         stopQrRefresh();
     };
 
+
     useEffect(() => {
         let mounted = true;
         stopAllTimers()
