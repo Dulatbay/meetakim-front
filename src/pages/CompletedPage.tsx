@@ -86,11 +86,6 @@ export const CompletedPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionId]);
 
-    const handleGoToQueue = () => {
-        if (sessionId) {
-            navigate(`/queue?sessionId=${sessionId}`);
-        }
-    };
 
     const handleGoToLogin = () => {
         navigate('/');
@@ -167,13 +162,6 @@ export const CompletedPage = () => {
                             </div>
                         </div>
                     )}
-
-                    <button
-                        onClick={handleGoToQueue}
-                        className="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg text-base md:text-lg font-semibold transition-all shadow-lg hover:shadow-xl"
-                    >
-                        Перейти к очереди
-                    </button>
 
                     <div className="mt-6 pt-6 border-t border-gray-200">
                         <p className="text-gray-400 text-xs sm:text-sm m-0">
