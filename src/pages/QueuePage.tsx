@@ -244,13 +244,25 @@ export const QueuePage = () => {
 
                 {queueData && (
                     <>
-                        <div className="mb-6 md:mb-8">
-                            <div className="text-base sm:text-lg text-gray-600 mb-3 sm:mb-4">Ваш номер в очереди</div>
-                            <div className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-3 sm:mb-4 leading-none">{queueData?.number ?? '—'}</div>
-                            <div className={`text-base sm:text-lg font-semibold px-4 py-2 rounded-full inline-block ${statusPillClasses(queueData.status)}`}>
-                                {getStatusText(queueData.status)}
+                        {queueData.number !== 0 && queueData.number !== null && (
+                            <div className="mb-6 md:mb-8">
+                                <div className="text-base sm:text-lg text-gray-600 mb-3 sm:mb-4">Ваш номер в очереди</div>
+                                <div className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-3 sm:mb-4 leading-none">{queueData.number}</div>
+                                <div className={`text-base sm:text-lg font-semibold px-4 py-2 rounded-full inline-block ${statusPillClasses(queueData.status)}`}>
+                                    {getStatusText(queueData.status)}
+                                </div>
                             </div>
-                        </div>
+                        )}
+
+                        {queueData.number === 0 && queueData.status === 'WAITING' && (
+                            <div
+                                className="bg-gradient-to-br from-purple-500 to-indigo-500 text-white p-6 md:p-8 rounded-xl mb-5">
+                                <div className="text-4xl md:text-5xl mb-3 md:mb-4">⏰</div>
+                                <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Вот-вот подойдёт ваша
+                                    очередь!</h2>
+                                <p className="m-0 opacity-90">Будьте готовы, встреча начнётся с минуты на минуту</p>
+                            </div>
+                        )}
 
                         {queueData.status === 'IN_BUFFER' && queueData.meetingUrl && (
                             <div className="bg-gradient-to-br from-amber-500 to-orange-500 text-white p-6 md:p-8 rounded-xl mb-5">
@@ -276,7 +288,7 @@ export const QueuePage = () => {
                             </div>
                         )}
 
-                        {queueData.status === 'WAITING' && (
+                        {queueData.status === 'WAITING' && queueData.number !== 0 && (
                             <div className="bg-gray-100 p-6 md:p-8 rounded-xl mb-5 text-left md:text-center">
                                 <p className="m-0 mb-3 md:mb-4 text-gray-600 leading-relaxed">Пожалуйста, оставайтесь на этой странице.</p>
                                 <p className="m-0 mb-4 md:mb-5 text-gray-600 leading-relaxed">Когда подойдет ваша очередь, здесь появится ссылка на встречу.</p>
