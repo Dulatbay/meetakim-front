@@ -9,7 +9,7 @@ const POSITION_UPDATE_INTERVAL = 5000; // 5 секунд
 
 export const QueuePage = () => {
     const [searchParams] = useSearchParams();
-    const sessionId = searchParams.get('sessionId') ?? searchParams.get('sessionid')
+    const sessionId = searchParams.get('sessionId') ?? searchParams.get('sessionid');
 
     const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -20,7 +20,18 @@ export const QueuePage = () => {
     const [registeredToastShown, setRegisteredToastShown] = useState(false);
     const navigate = useNavigate();
     const hasRegisteredRef = useRef(false);
+    const hasRedirectedRef = useRef(false);
+    const beforeUnloadHandlerRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
 
+    const goToMeeting = useCallback((url: string) => {
+        if (beforeUnloadHandlerRef.current) {
+            window.removeEventListener('beforeunload', beforeUnloadHandlerRef.current);
+        }
+
+        window.open(url, '_blank', 'noopener,noreferrer');
+
+        hasRedirectedRef.current = true;
+    }, []);
 
     const fetchQueueStatus = useCallback(async () => {
         try {
@@ -30,7 +41,6 @@ export const QueuePage = () => {
                 return;
             }
 
-            // Use position endpoint for polling
             const data = await fetchPosition(sessionId);
 
             if (!wasOnline) {
@@ -78,7 +88,6 @@ export const QueuePage = () => {
         }
     }, [lastStatus, wasOnline, sessionId, navigate]);
 
-    // Регистрация в очереди при первой загрузке (однократно/с троттлингом)
     useEffect(() => {
         const registerInQueue = async () => {
             if (!sessionId) {
@@ -87,7 +96,6 @@ export const QueuePage = () => {
             }
 
             if (hasRegisteredRef.current) {
-                // уже отправляли запрос на регистрацию — не повторяем
                 hasRegisteredRef.current = true;
                 await fetchQueueStatus();
                 return;
@@ -107,8 +115,7 @@ export const QueuePage = () => {
                     }
 
                 }
-                // Если уже зарегистрирован или другая ошибка, просто получаем статус
-                hasRegisteredRef.current = true; // считаем, что регистрация уже была
+                hasRegisteredRef.current = true;
                 await fetchQueueStatus();
             }
         };
@@ -116,18 +123,27 @@ export const QueuePage = () => {
         void registerInQueue();
     }, [fetchQueueStatus, registeredToastShown, navigate, sessionId]);
 
-    // Периодическое обновление статуса
+    useEffect(() => {
+        if (
+            queueData?.status === 'IN_BUFFER' &&
+            queueData?.meetingUrl &&
+            !hasRedirectedRef.current
+        ) {
+            goToMeeting(queueData.meetingUrl);
+        }
+    }, [queueData?.status, queueData?.meetingUrl, goToMeeting]);
+
     useEffect(() => {
         const interval = setInterval(fetchQueueStatus, POSITION_UPDATE_INTERVAL);
         return () => clearInterval(interval);
     }, [fetchQueueStatus]);
 
-    // Предупреждение при закрытии страницы
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             e.preventDefault();
             e.returnValue = 'Вы уверены? При выходе вы потеряете место в очереди!';
         };
+        beforeUnloadHandlerRef.current = handleBeforeUnload;
 
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
