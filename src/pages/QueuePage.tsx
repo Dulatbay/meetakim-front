@@ -155,26 +155,8 @@ export const QueuePage = () => {
         }
     };
 
-    const handleManualRegister = async () => {
-        try {
-            if (!sessionId) {
-                navigate('/login');
-                return;
-            }
-
-            if (hasRegisteredRef.current) {
-                await fetchQueueStatus();
-                return;
-            }
-            await queueJoin(sessionId);
-            toast.success('Вы зарегистрированы в очереди');
-            await fetchQueueStatus();
-        } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 401) {
-                return;
-            }
-            await fetchQueueStatus();
-        }
+    const handleReRegister = async () => {
+        navigate('/');
     };
 
     if (loading) {
@@ -244,7 +226,7 @@ export const QueuePage = () => {
 
                 {queueData && (
                     <>
-                        {queueData.number !== 0 && queueData.number !== null && (
+                        {queueData.status !== 'CANCELLED' && queueData.number !== 0 && queueData.number !== null && (
                             <div className="mb-6 md:mb-8">
                                 <div className="text-base sm:text-lg text-gray-600 mb-3 sm:mb-4">Ваш номер в очереди</div>
                                 <div className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-3 sm:mb-4 leading-none">{queueData.number}</div>
@@ -254,6 +236,17 @@ export const QueuePage = () => {
                             </div>
                         )}
 
+                        {queueData.status === 'CANCELLED' && (
+                            <div className="bg-gradient-to-br from-red-600 to-rose-500 text-white p-6 md:p-8 rounded-xl mb-5">
+                                <div className="text-4xl md:text-5xl mb-3 md:mb-4">❌</div>
+                                <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Ваша запись отменена</h2>
+                                <p className="m-0 mb-4 md:mb-5 opacity-90">Вы можете зарегистрироваться снова, если встреча ещё доступна.</p>
+
+                                <button onClick={handleReRegister} className="bg-white text-red-600 px-5 md:px-6 py-3 rounded-lg font-semibold inline-flex items-center gap-2 transition-transform duration-300 hover:-translate-y-0.5 shadow hover:shadow-lg">
+                                    Зарегистрироваться снова
+                                </button>
+                            </div>
+                        )}
                         {queueData.number === 0 && queueData.status === 'WAITING' && (
                             <div
                                 className="bg-gradient-to-br from-purple-500 to-indigo-500 text-white p-6 md:p-8 rounded-xl mb-5">
@@ -303,7 +296,7 @@ export const QueuePage = () => {
                 {!queueData && (
                     <div className="bg-gray-100 p-6 md:p-8 rounded-xl mb-5">
                         <p className="m-0 mb-4">Вы не зарегистрированы в очереди.</p>
-                        <button onClick={handleManualRegister} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-medium">
+                        <button onClick={handleReRegister} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-medium">
                             Зарегистрироваться
                         </button>
                     </div>
