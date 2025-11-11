@@ -239,8 +239,8 @@ export const QueuePage = () => {
                         {queueData.status === 'CANCELLED' && (
                             <div className="bg-gradient-to-br from-red-600 to-rose-500 text-white p-6 md:p-8 rounded-xl mb-5">
                                 <div className="text-4xl md:text-5xl mb-3 md:mb-4">❌</div>
-                                <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Ваша запись отменена</h2>
-                                <p className="m-0 mb-4 md:mb-5 opacity-90">Вы можете зарегистрироваться снова, если встреча ещё доступна.</p>
+                                <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Вы вышли.</h2>
+                                <p className="m-0 mb-4 md:mb-5 opacity-90">Оставайтесь онлайн для того что попасть на встречу</p>
 
                                 <button onClick={handleReRegister} className="bg-white text-red-600 px-5 md:px-6 py-3 rounded-lg font-semibold inline-flex items-center gap-2 transition-transform duration-300 hover:-translate-y-0.5 shadow hover:shadow-lg">
                                     Зарегистрироваться снова

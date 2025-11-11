@@ -13,7 +13,7 @@ export const LoginPage = () => {
     const [uuid] = useState(() => makeSessionId());
     const [qrUrl, setQrUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const [sessionId, setSessionId] = useState<number | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
     const [phoneNumber] = useState(() => localStorage.getItem("phoneNumber") || "");
 
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -26,7 +26,7 @@ export const LoginPage = () => {
         setQrUrl(url);
     };
 
-    const startPollingStatus = (id: number) => {
+    const startPollingStatus = (id: string) => {
         if (pollTimerRef.current) return; // уже запущен
         pollTimerRef.current = setInterval(async () => {
             try {
@@ -92,12 +92,13 @@ export const LoginPage = () => {
             setLoading(true);
             try {
                 const session = await createSession(uuid, phoneNumber);
-                setSessionId(session.id);
+                setSessionId(String(session.id));
+                console.log("Создана сессия:", session.id);
                 const {imageUrl} = await fetchQr(String(session.id));
                 setBlobUrlSafely(imageUrl);
 
                 startQrAutoRefresh();
-                startPollingStatus(session.id);
+                startPollingStatus(String(session.id));
             } catch (e) {
                 console.error(e);
                 localStorage.clear();
@@ -126,12 +127,12 @@ export const LoginPage = () => {
         try {
             const newUuid = makeSessionId();
             const session = await createSession(newUuid, phoneNumber);
-            setSessionId(session.id);
+            setSessionId(String(session.id));
 
             const {imageUrl} = await fetchQr(String(session.id));
             setBlobUrlSafely(imageUrl);
 
-            startPollingStatus(session.id);
+            startPollingStatus(String(session.id));
             startQrAutoRefresh();
 
             if (showToast) {

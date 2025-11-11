@@ -1,5 +1,5 @@
 export type CreateSessionResponse = {
-    id: number;
+    id: string | number;
     sessionUuid: string;
     expiry: string;
     state: string;
@@ -17,7 +17,7 @@ export type CreateSessionResponse = {
 };
 
 export type SignInitResponse = {
-    sessionId: number;
+    sessionId: string | number;
     timestamp: number;
     signUrl: string;
     status: "OK" | string;
@@ -53,7 +53,7 @@ export type PersonCertInfo = {
 };
 
 export type SignStatusResponse = {
-    id: number;
+    id: string | number;
     sessionUuid: string;
     expiry: string;
     state: string;
