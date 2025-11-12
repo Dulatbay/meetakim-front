@@ -56,12 +56,7 @@ export const QueuePage = () => {
             // Status change toasts (skip first undefined -> X change)
             if (lastStatus && data?.status && lastStatus !== data.status) {
                 if (data.status === 'IN_BUFFER') {
-                    toast.info('Ваша очередь подошла!', data.meetingUrl ? {
-                        action: {
-                            label: 'Открыть окно встречи',
-                            onClick: () => goToMeeting(data.meetingUrl!)
-                        }
-                    } : undefined);
+                    toast.info('Ваша очередь подошла!');
                 }
                 if (data.status === 'SERVED') {
                     toast.success('Встреча завершена');
