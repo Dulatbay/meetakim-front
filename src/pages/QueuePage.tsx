@@ -13,7 +13,6 @@ export const QueuePage = () => {
 
     const [queueData, setQueueData] = useState<PositionResponse | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
     const [isOnline, setIsOnline] = useState(true);
     const [wasOnline, setWasOnline] = useState(true);
     const [lastStatus, setLastStatus] = useState<QueueStatus | null>(null);
@@ -36,9 +35,24 @@ export const QueuePage = () => {
             window.removeEventListener('beforeunload', beforeUnloadHandlerRef.current);
         }
 
-        const win = window.open(url, '_blank', 'noopener,noreferrer');
+       // Открываем во всплывающем окне с заданными параметрами (отдельное окно)
+        const features = [
+            'noopener',
+            'noreferrer',
+            'width=1200',
+            'height=800',
+            'menubar=no',
+            'toolbar=no',
+            'location=no',
+            'status=no',
+            'resizable=yes',
+            'scrollbars=yes',
+        ].join(',');
+        const win = window.open(url, 'MEETING_WINDOW', features);
 
-        if (!win) {
+        if (win) {
+            try { win.focus(); } catch { void 0; }
+        } else {
             window.location.assign(url);
         }
     }, []);
@@ -63,8 +77,8 @@ export const QueuePage = () => {
                 if (data.status === 'IN_BUFFER') {
                     toast.info('Ваша очередь подошла!', data.meetingUrl ? {
                         action: {
-                            label: 'Перейти к встрече',
-                            onClick: () => window.open(data.meetingUrl!, '_blank', 'noopener,noreferrer')
+                            label: 'Открыть окно встречи',
+                            onClick: () => goToMeeting(data.meetingUrl!)
                         }
                     } : undefined);
                 }
@@ -78,7 +92,6 @@ export const QueuePage = () => {
 
             setLastStatus(data?.status ?? null);
             setQueueData(data);
-            setError('');
             setIsOnline(true);
         } catch (error: unknown) {
             if (axios.isAxiosError(error)) {
@@ -86,7 +99,6 @@ export const QueuePage = () => {
                     return; // interceptor/logging handles it
                 }
             }
-            setError('Ошибка получения данных очереди');
 
             if (wasOnline) {
                 toast.error('Потеряно соединение с сервером. Попытка восстановления...');
@@ -96,7 +108,7 @@ export const QueuePage = () => {
         } finally {
             setLoading(false);
         }
-    }, [lastStatus, wasOnline, sessionId, navigate]);
+    }, [lastStatus, wasOnline, sessionId, navigate, goToMeeting]);
 
     useEffect(() => {
         const registerInQueue = async () => {
@@ -226,12 +238,6 @@ export const QueuePage = () => {
                     </button>
                 </div>
 
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 p-3 md:p-4 rounded-lg mb-5 text-sm">
-                        {error}
-                    </div>
-                )}
-
                 <div className={`flex items-center justify-center p-3 rounded-xl mb-6 md:mb-8 text-sm font-semibold text-white ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}>
                     <span className="w-2 h-2 rounded-full mr-2 bg-white"></span>
                     {isOnline ? 'Онлайн' : 'Офлайн - восстановление соединения...'}
@@ -275,14 +281,12 @@ export const QueuePage = () => {
                                 <div className="text-4xl md:text-5xl mb-3 md:mb-4">🎉</div>
                                 <h2 className="text-lg md:text-xl font-semibold m-0 mb-2">Ваша очередь подошла!</h2>
                                 <p className="m-0 mb-4 md:mb-5 opacity-90">Можете присоединиться к встрече</p>
-                                <a
-                                    href={queueData.meetingUrl}
-                                    className="bg-white text-amber-600 px-5 md:px-6 py-3 rounded-lg no-underline font-semibold inline-flex items-center gap-2 transition-transform duration-300 hover:-translate-y-0.5 shadow hover:shadow-lg"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    onClick={() => goToMeeting(queueData.meetingUrl!)}
+                                    className="bg-white text-amber-600 px-5 md:px-6 py-3 rounded-lg font-semibold inline-flex items-center gap-2 transition-transform duration-300 hover:-translate-y-0.5 shadow hover:shadow-lg"
                                 >
-                                    Перейти к встрече
-                                </a>
+                                    Открыть встречу в отдельном окне
+                                </button>
                             </div>
                         )}
 
