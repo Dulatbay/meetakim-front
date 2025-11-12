@@ -179,36 +179,6 @@ export const QueuePage = () => {
         );
     }
 
-    const getStatusText = (status: QueueStatus | string) => {
-        switch (status) {
-            case 'WAITING':
-                return 'В ожидании';
-            case 'IN_BUFFER':
-                return 'Ваша очередь';
-            case 'SERVED':
-                return 'Встреча завершена';
-            case 'CANCELLED':
-                return 'Встреча отменена';
-            default:
-                return String(status);
-        }
-    };
-
-    const statusPillClasses = (status: QueueStatus | string) => {
-        switch (status) {
-            case 'WAITING':
-                return 'bg-blue-100 text-blue-700';
-            case 'IN_BUFFER':
-                return 'bg-orange-100 text-orange-700';
-            case 'SERVED':
-                return 'bg-green-100 text-green-700';
-            case 'CANCELLED':
-                return 'bg-red-100 text-red-700';
-            default:
-                return 'bg-gray-100 text-gray-600';
-        }
-    };
-
     return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 sm:p-5">
             <div className="bg-white rounded-2xl shadow-xl p-6 md:p-10 w-full max-w-[600px] text-center">
@@ -226,12 +196,12 @@ export const QueuePage = () => {
 
                 {queueData && (
                     <>
-                        {queueData.status !== 'CANCELLED' && queueData.number !== 0 && queueData.number !== null && (
+                        {queueData.status !== 'CANCELLED' && queueData.status !== 'SERVED' && queueData.status !== 'WAITING' && queueData.number !== 0 && queueData.number !== null && (
                             <div className="mb-6 md:mb-8">
                                 <div className="text-base sm:text-lg text-gray-600 mb-3 sm:mb-4">Ваш номер в очереди</div>
                                 <div className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-3 sm:mb-4 leading-none">{queueData.number}</div>
-                                <div className={`text-base sm:text-lg font-semibold px-4 py-2 rounded-full inline-block ${statusPillClasses(queueData.status)}`}>
-                                    {getStatusText(queueData.status)}
+                                <div className={`text-base sm:text-lg font-semibold px-4 py-2 rounded-full inline-block bg-blue-100 text-blue-700`}>
+                                    В ожидании
                                 </div>
                             </div>
                         )}
@@ -247,6 +217,7 @@ export const QueuePage = () => {
                                 </button>
                             </div>
                         )}
+
                         {queueData.number === 0 && queueData.status === 'WAITING' && (
                             <div
                                 className="bg-gradient-to-br from-purple-500 to-indigo-500 text-white p-6 md:p-8 rounded-xl mb-5">
