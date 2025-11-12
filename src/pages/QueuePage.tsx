@@ -35,11 +35,7 @@ export const QueuePage = () => {
             window.removeEventListener('beforeunload', beforeUnloadHandlerRef.current);
         }
 
-        const win = window.open(url, '_blank', 'noopener,noreferrer');
-
-        if (!win) {
-            window.location.assign(url);
-        }
+        window.open(url, '_blank', 'noopener,noreferrer');
     }, []);
 
     const fetchQueueStatus = useCallback(async () => {
