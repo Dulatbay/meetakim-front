@@ -196,7 +196,7 @@ export const QueuePage = () => {
 
                 {queueData && (
                     <>
-                        {queueData.status !== 'CANCELLED' && queueData.status !== 'SERVED' && queueData.status !== 'WAITING' && queueData.number !== 0 && queueData.number !== null && (
+                        {queueData.status !== 'CANCELLED' && queueData.status !== 'SERVED' && queueData.status !== 'IN_BUFFER' && queueData.number !== 0 && queueData.number !== null && (
                             <div className="mb-6 md:mb-8">
                                 <div className="text-base sm:text-lg text-gray-600 mb-3 sm:mb-4">Ваш номер в очереди</div>
                                 <div className="text-5xl md:text-6xl font-extrabold text-gray-800 mb-3 sm:mb-4 leading-none">{queueData.number}</div>
