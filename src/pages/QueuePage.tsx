@@ -35,24 +35,9 @@ export const QueuePage = () => {
             window.removeEventListener('beforeunload', beforeUnloadHandlerRef.current);
         }
 
-       // Открываем во всплывающем окне с заданными параметрами (отдельное окно)
-        const features = [
-            'noopener',
-            'noreferrer',
-            'width=1200',
-            'height=800',
-            'menubar=no',
-            'toolbar=no',
-            'location=no',
-            'status=no',
-            'resizable=yes',
-            'scrollbars=yes',
-        ].join(',');
-        const win = window.open(url, 'MEETING_WINDOW', features);
+        const win = window.open(url, '_blank', 'noopener,noreferrer');
 
-        if (win) {
-            try { win.focus(); } catch { void 0; }
-        } else {
+        if (!win) {
             window.location.assign(url);
         }
     }, []);
