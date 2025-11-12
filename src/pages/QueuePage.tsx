@@ -22,15 +22,25 @@ export const QueuePage = () => {
     const hasRegisteredRef = useRef(false);
     const hasRedirectedRef = useRef(false);
     const beforeUnloadHandlerRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null);
+    const pollIntervalRef = useRef<number | null>(null);
 
     const goToMeeting = useCallback((url: string) => {
+        hasRedirectedRef.current = true;
+
+        if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+        }
+
         if (beforeUnloadHandlerRef.current) {
             window.removeEventListener('beforeunload', beforeUnloadHandlerRef.current);
         }
 
-        window.open(url, '_blank', 'noopener,noreferrer');
+        const win = window.open(url, '_blank', 'noopener,noreferrer');
 
-        hasRedirectedRef.current = true;
+        if (!win) {
+            window.location.assign(url);
+        }
     }, []);
 
     const fetchQueueStatus = useCallback(async () => {
@@ -134,8 +144,12 @@ export const QueuePage = () => {
     }, [queueData?.status, queueData?.meetingUrl, goToMeeting]);
 
     useEffect(() => {
-        const interval = setInterval(fetchQueueStatus, POSITION_UPDATE_INTERVAL);
-        return () => clearInterval(interval);
+        const id = window.setInterval(fetchQueueStatus, POSITION_UPDATE_INTERVAL);
+        pollIntervalRef.current = id;
+        return () => {
+            clearInterval(id);
+            pollIntervalRef.current = null;
+        };
     }, [fetchQueueStatus]);
 
     useEffect(() => {
@@ -205,7 +219,6 @@ export const QueuePage = () => {
         }
     };
 
-    // Tailwind class mappings instead of inline colors
     const statusPillClasses = (status: QueueStatus | string) => {
         switch (status) {
             case 'WAITING':
