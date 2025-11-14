@@ -3,7 +3,6 @@ import type {
     CreateSessionResponse,
     SignCallbackPayload,
     SignCallbackResponse,
-    SignInitResponse,
     SignStatusResponse
 } from "../../types/sign.t.ts";
 
@@ -14,9 +13,9 @@ export const createSession = async (uuid: string, phoneNumber: string): Promise<
     return data;
 };
 
-export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; contentType: string | null }> => {
+export const fetchQr = async (sessionUUID: string): Promise<{ imageUrl: string; contentType: string | null }> => {
     const response = await axiosInstance.get(`/api/qr`, {
-        params: { sessionId: String(sessionId) },
+        params: { sessionUUID },
         responseType: "blob",
         headers: {
             Accept: "image/*",
@@ -30,21 +29,14 @@ export const fetchQr = async (sessionId: string): Promise<{ imageUrl: string; co
     return {imageUrl, contentType};
 };
 
-export const initSign = async (sessionId: string): Promise<SignInitResponse> => {
-    const {data} = await axiosInstance.get<SignInitResponse>(`/api/sign/init`, {
-        params: { sessionId: String(sessionId) },
-    });
-    return data;
-};
-
-export const getSignStatus = async (sessionId: string): Promise<SignStatusResponse> => {
+export const getSignStatus = async (sessionUUID: string): Promise<SignStatusResponse> => {
     try {
         if (typeof window !== 'undefined') {
             const pathname = window.location?.pathname || '';
             const allowlist = ['/login', '/admin', '/completed'];
             if (!allowlist.some(p => pathname.startsWith(p))) {
                 // Диагностический лог — покажет откуда вызван
-                console.debug('[getSignStatus] blocked call', { sessionId, pathname, stack: new Error().stack });
+                console.debug('[getSignStatus] blocked call', { sessionId: sessionUUID, pathname, stack: new Error().stack });
                 return Promise.reject(new Error(`getSignStatus blocked on path ${pathname}`));
             }
         }
@@ -54,14 +46,14 @@ export const getSignStatus = async (sessionId: string): Promise<SignStatusRespon
     }
 
     const {data} = await axiosInstance.get<SignStatusResponse>(`/api/sign/status`, {
-        params: { sessionId: String(sessionId) },
+        params: { sessionUUID },
     });
     return data;
 };
 
-export const getEgovMobileUrl = async (sessionId: string): Promise<{ url: string; sessionId: string }> => {
-    const {data} = await axiosInstance.get<{ url: string; sessionId: string }>(`/api/egov-mobile-url`, {
-        params: { sessionId: String(sessionId) },
+export const getEgovMobileUrl = async (sessionUUID: string): Promise<{ url: string; sessionUUID: string }> => {
+    const {data} = await axiosInstance.get<{ url: string; sessionUUID: string }>(`/api/egov-mobile-url`, {
+        params: { sessionUUID },
     });
     return data;
 };

@@ -92,13 +92,13 @@ export const LoginPage = () => {
             setLoading(true);
             try {
                 const session = await createSession(uuid, phoneNumber);
-                setSessionId(String(session.id));
-                console.log("Создана сессия:", session.id);
-                const {imageUrl} = await fetchQr(String(session.id));
+                setSessionId(session.sessionUuid);
+                console.log("Создана сессия:", session.sessionUuid);
+                const {imageUrl} = await fetchQr(session.sessionUuid);
                 setBlobUrlSafely(imageUrl);
 
                 startQrAutoRefresh();
-                startPollingStatus(String(session.id));
+                startPollingStatus(session.sessionUuid);
             } catch (e) {
                 console.error(e);
                 localStorage.clear();
@@ -127,12 +127,12 @@ export const LoginPage = () => {
         try {
             const newUuid = makeSessionId();
             const session = await createSession(newUuid, phoneNumber);
-            setSessionId(String(session.id));
+            setSessionId(session.sessionUuid);
 
-            const {imageUrl} = await fetchQr(String(session.id));
+            const {imageUrl} = await fetchQr(session.sessionUuid);
             setBlobUrlSafely(imageUrl);
 
-            startPollingStatus(String(session.id));
+            startPollingStatus(session.sessionUuid);
             startQrAutoRefresh();
 
             if (showToast) {
