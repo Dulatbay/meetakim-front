@@ -13,12 +13,10 @@ export const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
     (config) => {
-        // Проверяем, есть ли admin auth (для модераторских эндпоинтов)
         const adminAuth = getAdminAuth();
         if (adminAuth) {
             config.headers['Authorization'] = `Basic ${adminAuth}`;
         } else {
-            // Если нет admin auth, используем обычный токен
             const token = getToken();
             if (token) {
                 config.headers['Authorization'] = `Bearer ${token}`;
