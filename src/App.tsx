@@ -1,10 +1,11 @@
 import {LoginPage} from "./pages/LoginPage.tsx";
 import {AdminLoginPage} from "./pages/AdminLoginPage.tsx";
+import {AkimLoginPage} from "./pages/AkimLoginPage.tsx";
 import {PhoneInputPage} from "./pages/PhoneInputPage.tsx";
-import {RequireAuth} from "./components/RequireAuth.tsx";
-import {QueuePage} from "./pages/QueuePage.tsx";
+import {RequireAdminAuth} from "./components/RequireAdminAuth.tsx";
+import {RequireAkimAuth} from "./components/RequireAkimAuth.tsx";
 import {AdminPage} from "./pages/AdminPage.tsx";
-import {CompletedPage} from "./pages/CompletedPage.tsx";
+import {AkimPage} from "./pages/AkimPage.tsx";
 import {Toaster} from "sonner";
 import {Route, Routes} from "react-router-dom";
 
@@ -12,28 +13,31 @@ const App = () => {
     return (
         <>
             <Routes>
+                {/* Главная страница - ввод телефона */}
                 <Route path="/" element={<PhoneInputPage/>}/>
+                
+                {/* Авторизация граждан через eGov Mobile */}
                 <Route path="/login" element={<LoginPage/>}/>
+                
+                {/* Панель администратора */}
                 <Route path="/admin/login" element={<AdminLoginPage/>}/>
-
-                <Route
-                    path="/queue"
-                    element={
-                        <QueuePage/>
-                    }
-                />
-
-                <Route
-                    path="/completed"
-                    element={<CompletedPage/>}
-                />
-
                 <Route
                     path="/admin"
                     element={
-                        <RequireAuth>
+                        <RequireAdminAuth>
                             <AdminPage/>
-                        </RequireAuth>
+                        </RequireAdminAuth>
+                    }
+                />
+                
+                {/* Панель акима */}
+                <Route path="/akim/login" element={<AkimLoginPage/>}/>
+                <Route
+                    path="/akim"
+                    element={
+                        <RequireAkimAuth>
+                            <AkimPage/>
+                        </RequireAkimAuth>
                     }
                 />
             </Routes>

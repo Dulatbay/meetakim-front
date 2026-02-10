@@ -7,7 +7,7 @@ import type {
 } from "../../types/sign.t.ts";
 
 export const createSession = async (sessionUUID: string, phoneNumber: string): Promise<CreateSessionResponse> => {
-    const {data} = await axiosInstance.get<CreateSessionResponse>(`/api/sign/create_session`, {
+    const {data} = await axiosInstance.post<CreateSessionResponse>(`/api/sign/create_session`, null, {
         params: { sessionUUID, phoneNumber },
     });
     return data;

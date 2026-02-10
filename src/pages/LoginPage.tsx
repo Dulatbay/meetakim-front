@@ -6,6 +6,7 @@ import {makeSessionId} from "../utils/session";
 
 import type {SignStatusResponse} from "../types/sign.t";
 import {createSession, fetchQr, getSignStatus, getEgovMobileUrl} from "../api/endpoints/sign.ts";
+import {getCitizenMeetingUrl} from "../api/endpoints/qbox";
 
 export const LoginPage = () => {
     const navigate = useNavigate();
@@ -15,6 +16,8 @@ export const LoginPage = () => {
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [phoneNumber] = useState(() => localStorage.getItem("phoneNumber") || "");
+    const [meetingUrl, setMeetingUrl] = useState<string | null>(null);
+    const [showMeetingButton, setShowMeetingButton] = useState(false);
 
     const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const qrRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -40,7 +43,42 @@ export const LoginPage = () => {
                     }
                     toast.success("Успешная авторизация");
                     stopPolling();
-                    navigate(`/queue?sessionId=${id}`);
+                    
+                    // Получаем ссылку на встречу
+                    try {
+                        toast.loading("Получение ссылки на встречу...");
+                        const meetingData = await getCitizenMeetingUrl(id);
+                        toast.dismiss();
+                        
+                        // Сохраняем ссылку
+                        setMeetingUrl(meetingData.meetingUrl);
+                        setShowMeetingButton(true);
+                        
+                        // Пробуем открыть встречу автоматически
+                        const opened = window.open(meetingData.meetingUrl, '_blank', 'noopener,noreferrer');
+                        
+                        if (opened) {
+                            toast.success("Встреча открыта в новой вкладке");
+                        } else {
+                            toast.info("Нажмите кнопку ниже для входа в комнату");
+                        }
+                    } catch (meetingError: any) {
+                        toast.dismiss();
+                        console.error("Ошибка получения ссылки на встречу:", meetingError);
+                        
+                        if (meetingError.response?.status === 404) {
+                            toast.error("Встреча не найдена. Администратор еще не создал комнату.");
+                        } else if (meetingError.response?.status === 400) {
+                            toast.error("Сессия не подписана или недействительна.");
+                        } else {
+                            toast.error("Не удалось получить ссылку на встречу");
+                        }
+                        
+                        // Переход на главную через 3 секунды
+                        setTimeout(() => {
+                            navigate('/');
+                        }, 3000);
+                    }
                 } else if (resp.state === "FAILED") {
                     toast.error("Авторизация отклонена в eGov Mobile");
                     stopPolling();
@@ -191,60 +229,93 @@ export const LoginPage = () => {
                     <p className="text-gray-600 text-base sm:text-lg">Онлайн очередь</p>
                 </div>
 
-                <div className="text-center my-8">
-                    <div className="inline-block border-2 border-gray-300 rounded-xl overflow-hidden p-2">
-                        <div className="w-40 h-40 sm:w-52 sm:h-52 flex items-center justify-center bg-gray-50">
-                            {qrUrl ? (
-                                <img
-                                    src={qrUrl}
-                                    alt="QR для eGov Mobile"
-                                    className="w-full h-full object-contain"
-                                    draggable={false}
-                                />
-                            ) : (
-                                <svg className="w-full h-full" viewBox="0 0 200 200" aria-hidden>
-                                    <rect width="200" height="200" fill="#f0f0f0"/>
-                                    <text x="50%" y="50%" textAnchor="middle" dy=".3em" fill="#999" fontSize="14">
-                                        Загрузка QR…
-                                    </text>
-                                </svg>
-                            )}
+                {/* Если получена ссылка на встречу */}
+                {showMeetingButton && meetingUrl ? (
+                    <div className="text-center">
+                        <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 md:p-8 rounded-xl mb-6">
+                            <div className="text-5xl mb-4">✅</div>
+                            <h2 className="text-xl md:text-2xl font-bold mb-2">Успешная авторизация!</h2>
+                            <p className="text-base opacity-90">Вы можете войти в видеоконференцию</p>
+                        </div>
+
+                        <button
+                            onClick={() => window.open(meetingUrl, '_blank', 'noopener,noreferrer')}
+                            className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg text-lg font-semibold transition-all shadow-lg hover:shadow-xl"
+                        >
+                            🎥 Войти в комнату встречи
+                        </button>
+
+                        <button
+                            onClick={() => navigate('/')}
+                            className="w-full mt-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm font-medium transition"
+                        >
+                            ← Вернуться на главную
+                        </button>
+
+                        <div className="mt-6 pt-6 border-t border-gray-200">
+                            <p className="text-gray-500 text-xs">
+                                Если встреча не открылась автоматически, нажмите кнопку выше
+                            </p>
                         </div>
                     </div>
+                ) : (
+                    <>
+                        <div className="text-center my-8">
+                            <div className="inline-block border-2 border-gray-300 rounded-xl overflow-hidden p-2">
+                                <div className="w-40 h-40 sm:w-52 sm:h-52 flex items-center justify-center bg-gray-50">
+                                    {qrUrl ? (
+                                        <img
+                                            src={qrUrl}
+                                            alt="QR для eGov Mobile"
+                                            className="w-full h-full object-contain"
+                                            draggable={false}
+                                        />
+                                    ) : (
+                                        <svg className="w-full h-full" viewBox="0 0 200 200" aria-hidden>
+                                            <rect width="200" height="200" fill="#f0f0f0"/>
+                                            <text x="50%" y="50%" textAnchor="middle" dy=".3em" fill="#999" fontSize="14">
+                                                Загрузка QR…
+                                            </text>
+                                        </svg>
+                                    )}
+                                </div>
+                            </div>
 
-                    <p className="text-gray-500 mt-4 text-sm sm:text-base">
-                        Отсканируйте QR-код приложением <b>eGov Mobile</b>
-                    </p>
-                </div>
+                            <p className="text-gray-500 mt-4 text-sm sm:text-base">
+                                Отсканируйте QR-код приложением <b>eGov Mobile</b>
+                            </p>
+                        </div>
 
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleManualRefresh}
-                        className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm font-medium transition"
-                        disabled={loading}
-                    >
-                        Обновить QR
-                    </button>
-                </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleManualRefresh}
+                                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-sm font-medium transition"
+                                disabled={loading}
+                            >
+                                Обновить QR
+                            </button>
+                        </div>
 
-                <div className="mt-4">
-                    <button
-                        onClick={handleEgovMobileLogin}
-                        className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
-                        disabled={loading}
-                    >
-                        Войти через eGov Mobile
-                    </button>
-                </div>
+                        <div className="mt-4">
+                            <button
+                                onClick={handleEgovMobileLogin}
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition"
+                                disabled={loading}
+                            >
+                                Войти через eGov Mobile
+                            </button>
+                        </div>
 
-                <div className="mt-8 pt-6 border-t border-gray-200">
-                    <p className="text-gray-500 text-sm mb-2">
-                        После входа вы автоматически встанете в очередь на встречу.
-                    </p>
-                    <p className="text-yellow-500 font-semibold text-sm">
-                        ⚠️ Важно: оставайтесь онлайн, иначе ваша очередь будет сброшена!
-                    </p>
-                </div>
+                        <div className="mt-8 pt-6 border-t border-gray-200">
+                            <p className="text-gray-500 text-sm mb-2">
+                                После успешной авторизации вы получите ссылку на встречу.
+                            </p>
+                            <p className="text-blue-600 font-semibold text-sm">
+                                ✨ Встреча откроется автоматически в новой вкладке
+                            </p>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

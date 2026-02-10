@@ -1,161 +1,134 @@
-import {useState, useEffect, useCallback} from 'react';
-import {useNavigate} from 'react-router-dom';
-import {toast} from 'sonner';
-import type {QueueItem, QueueStats, QueueStatus, SortDirection} from '../types/moderator.t';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { clearAdminAuth } from '../utils/tokenUtils';
 import {
-    fetchQueues,
-    fetchStats,
-    updateQueueStatus,
-    updateMeetingUrl,
-    bulkUpdateStatus,
-    deleteQueue
-} from '../api/endpoints/moderator';
-import {clearAdminAuth} from '../utils/tokenUtils';
+    getAdminMeetingUrl,
+    getAdminHealth,
+    ensureAdminMeeting,
+    getMeetingInfo,
+    type HealthCheckResponse,
+    type MeetingInfoResponse
+} from '../api/endpoints/qbox';
+import { fetchSessions } from '../api/endpoints/admin';
+import type { SessionResponseDto, PageResponse, SessionState, SessionFilters } from '../types/admin.t';
 
-const REFRESH_INTERVAL = 5000; // 5 секунд
+const REFRESH_INTERVAL = 30000; // 30 секунд
 
 export const AdminPage = () => {
     const navigate = useNavigate();
-    const [queues, setQueues] = useState<QueueItem[]>([]);
-    const [stats, setStats] = useState<QueueStats | null>(null);
+    const [activeTab, setActiveTab] = useState<'meeting' | 'sessions'>('meeting');
+    
+    // Meeting tab state
+    const [health, setHealth] = useState<HealthCheckResponse | null>(null);
+    const [meetingInfo, setMeetingInfo] = useState<MeetingInfoResponse | null>(null);
     const [loading, setLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<QueueStatus | ''>('');
-    const [editingUrl, setEditingUrl] = useState<number | null>(null);
-    const [newUrl, setNewUrl] = useState('');
-    const [bulkFrom, setBulkFrom] = useState('');
-    const [bulkTo, setBulkTo] = useState('');
-    const [bulkStatus, setBulkStatus] = useState<QueueStatus>('SERVED');
-    const [isMobileView, setIsMobileView] = useState(false);
-
-    // Pagination state
+    const [joining, setJoining] = useState(false);
+    const [displayName, setDisplayName] = useState('Администратор');
+    
+    // Sessions tab state
+    const [sessions, setSessions] = useState<PageResponse<SessionResponseDto> | null>(null);
+    const [sessionsLoading, setSessionsLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [stateFilter, setStateFilter] = useState<SessionState | ''>('');
     const [currentPage, setCurrentPage] = useState(0);
     const [pageSize, setPageSize] = useState(20);
-    const [totalPages, setTotalPages] = useState(0);
-    const [totalElements, setTotalElements] = useState(0);
-    const [sortField, setSortField] = useState('sequenceNumber');
-    const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
 
-    // Detect screen size
-    useEffect(() => {
-        const checkMobileView = () => {
-            setIsMobileView(window.innerWidth < 1024);
-        };
-        checkMobileView();
-        window.addEventListener('resize', checkMobileView);
-        return () => window.removeEventListener('resize', checkMobileView);
-    }, []);
-
-    const loadData = useCallback(async () => {
+    const checkHealth = useCallback(async () => {
         try {
-            const [queuesData, statsData] = await Promise.all([
-                fetchQueues(filterStatus || undefined, currentPage, pageSize, sortField, sortDirection),
-                fetchStats()
-            ]);
-            console.log('Загружены данные:', {
-                queuesData,
-                content: queuesData.content,
-                contentLength: queuesData.content?.length,
-                totalPages: queuesData.totalPages,
-                totalElements: queuesData.totalElements,
-                currentPage,
-                filterStatus
-            });
-            setQueues(queuesData.content || []);
-            setTotalPages(queuesData.totalPages || 0);
-            setTotalElements(queuesData.totalElements || 0);
-            setStats(statsData);
+            const data = await getAdminHealth();
+            setHealth(data);
+            
+            if (data.adminMeeting?.code) {
+                try {
+                    const info = await getMeetingInfo(data.adminMeeting.code);
+                    setMeetingInfo(info);
+                } catch (error) {
+                    console.error('Ошибка получения информации о встрече:', error);
+                }
+            }
         } catch (error) {
-            console.error('Ошибка загрузки данных:', error);
-            toast.error('Ошибка загрузки данных');
-            setQueues([]);
+            console.error('Ошибка проверки здоровья:', error);
+            setHealth({ status: 'unhealthy', qboxConnection: 'error', error: 'Не удалось подключиться' });
         } finally {
             setLoading(false);
         }
-    }, [filterStatus, currentPage, pageSize, sortField, sortDirection]);
+    }, []);
+
+    const loadSessions = useCallback(async () => {
+        setSessionsLoading(true);
+        try {
+            const filters: SessionFilters = {
+                page: currentPage,
+                size: pageSize,
+                sortBy: 'createdAt',
+                sortDirection: 'DESC'
+            };
+            
+            if (searchQuery) filters.search = searchQuery;
+            if (stateFilter) filters.state = stateFilter;
+            
+            const data = await fetchSessions(filters);
+            setSessions(data);
+        } catch (error) {
+            console.error('Ошибка загрузки сессий:', error);
+            toast.error('Ошибка загрузки сессий');
+        } finally {
+            setSessionsLoading(false);
+        }
+    }, [currentPage, pageSize, searchQuery, stateFilter]);
 
     useEffect(() => {
-        void loadData();
-    }, [loadData]);
+        if (activeTab === 'meeting') {
+            checkHealth();
+            const interval = setInterval(checkHealth, REFRESH_INTERVAL);
+            return () => clearInterval(interval);
+        }
+    }, [activeTab, checkHealth]);
 
     useEffect(() => {
-        const interval = setInterval(loadData, REFRESH_INTERVAL);
-        return () => clearInterval(interval);
-    }, [loadData]);
+        if (activeTab === 'sessions') {
+            loadSessions();
+        }
+    }, [activeTab, loadSessions]);
 
-    useEffect(() => {
-        setCurrentPage(0);
-    }, [filterStatus]);
-
-    const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
+    const handleEnsureMeeting = async () => {
+        setLoading(true);
         try {
-            await updateQueueStatus(id, newStatus);
-            toast.success('Статус изменен');
-            await loadData();
+            await ensureAdminMeeting();
+            toast.success('Комната успешно создана/обновлена');
+            await checkHealth();
         } catch (error) {
-            console.error('Ошибка изменения статуса:', error);
-            toast.error('Ошибка изменения статуса');
+            console.error('Ошибка создания комнаты:', error);
+            toast.error('Ошибка создания комнаты');
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleUrlUpdate = async (id: number) => {
-        if (!newUrl.trim()) {
-            toast.error('Введите URL встречи');
-            return;
-        }
-        try {
-            await updateMeetingUrl(id, newUrl);
-            toast.success('URL встречи обновлен');
-            setEditingUrl(null);
-            setNewUrl('');
-            await loadData();
-        } catch (error) {
-            console.error('Ошибка обновления URL:', error);
-            toast.error('Ошибка обновления URL');
-        }
-    };
-
-    const handleBulkUpdate = async () => {
-        const from = parseInt(bulkFrom);
-        const to = parseInt(bulkTo);
-
-        if (!from || !to || from > to) {
-            toast.error('Проверьте диапазон номеров');
+    const handleJoinMeeting = async () => {
+        if (!displayName.trim()) {
+            toast.error('Введите ваше имя');
             return;
         }
 
+        setJoining(true);
         try {
-            const result = await bulkUpdateStatus(from, to, bulkStatus);
-            toast.success(`Обновлено ${result.updatedCount} записей`);
-            setBulkFrom('');
-            setBulkTo('');
-            await loadData();
-        } catch (error) {
-            console.error('Ошибка массового обновления:', error);
-            toast.error('Ошибка массового обновления');
+            const response = await getAdminMeetingUrl(displayName);
+            window.open(response.meetingUrl, '_blank', 'noopener,noreferrer');
+            toast.success('Переход в комнату встречи');
+        } catch (error: any) {
+            console.error('Ошибка входа в комнату:', error);
+            if (error.response?.status === 503) {
+                toast.error('QBox сервис недоступен. Попробуйте позже.');
+            } else if (error.message?.includes('unauthorized')) {
+                toast.error('Ошибка авторизации в QBox. Обратитесь к системному администратору.');
+            } else {
+                toast.error('Ошибка входа в комнату');
+            }
+        } finally {
+            setJoining(false);
         }
-    };
-
-    const handleDelete = async (id: number) => {
-        if (!window.confirm('Вы уверены, что хотите отменить эту очередь?')) {
-            return;
-        }
-        try {
-            await deleteQueue(id);
-            toast.success('Очередь отменена');
-            await loadData();
-        } catch (error) {
-            console.error('Ошибка отмены очереди:', error);
-            toast.error('Ошибка отмены очереди');
-        }
-    };
-
-    const handlePageChange = (newPage: number) => {
-        setCurrentPage(newPage);
-    };
-
-    const handlePageSizeChange = (newSize: number) => {
-        setPageSize(newSize);
-        setCurrentPage(0); // Reset to first page when changing page size
     };
 
     const handleLogout = () => {
@@ -163,38 +136,46 @@ export const AdminPage = () => {
         navigate('/admin/login');
     };
 
-    const getStatusText = (status: QueueStatus) => {
-        switch (status) {
-            case 'WAITING':
-                return 'В ожидании';
-            case 'IN_BUFFER':
-                return 'В буфере';
-            case 'SERVED':
-                return 'Обслужен';
-            case 'CANCELLED':
-                return 'Отменен';
+    const handleSearch = () => {
+        setCurrentPage(0);
+        loadSessions();
+    };
+
+    const getStateText = (state: number) => {
+        switch (state) {
+            case 0: return '⏸️ Не начата';
+            case 1: return '▶️ Активна';
+            case 2: return '⏹️ Завершена';
+            case -1: return '❌ Отменена';
+            default: return 'Неизвестно';
         }
     };
 
-    const getStatusColor = (status: QueueStatus) => {
-        switch (status) {
-            case 'WAITING':
-                return 'bg-blue-100 text-blue-700';
-            case 'IN_BUFFER':
-                return 'bg-orange-100 text-orange-700';
-            case 'SERVED':
-                return 'bg-green-100 text-green-700';
-            case 'CANCELLED':
-                return 'bg-red-100 text-red-700';
+    const getSessionStateColor = (state: SessionState) => {
+        switch (state) {
+            case 'CREATED': return 'bg-gray-100 text-gray-700';
+            case 'WAITING': return 'bg-blue-100 text-blue-700';
+            case 'SIGNED': return 'bg-green-100 text-green-700';
+            case 'FAILED': return 'bg-red-100 text-red-700';
+            case 'EXPIRED': return 'bg-orange-100 text-orange-700';
         }
     };
 
-    if (loading) {
+    const getSessionStateText = (state: SessionState) => {
+        switch (state) {
+            case 'CREATED': return 'Создана';
+            case 'WAITING': return 'Ожидание';
+            case 'SIGNED': return 'Подписана';
+            case 'FAILED': return 'Ошибка';
+            case 'EXPIRED': return 'Истекла';
+        }
+    };
+
+    if (loading && activeTab === 'meeting') {
         return (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
                 <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-                    <div
-                        className="inline-block w-10 h-10 border-4 border-gray-200 rounded-full border-t-indigo-500 animate-spin mb-4"/>
+                    <div className="inline-block w-10 h-10 border-4 border-gray-200 rounded-full border-t-indigo-500 animate-spin mb-4" />
                     <div className="text-gray-600">Загрузка...</div>
                 </div>
             </div>
@@ -202,12 +183,15 @@ export const AdminPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-100 p-3 sm:p-4 md:p-6">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-3 sm:p-4 md:p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Панель модератора</h1>
+                        <div>
+                            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Панель администратора</h1>
+                            <p className="text-gray-600 text-sm mt-1">Управление встречами и сессиями</p>
+                        </div>
                         <button
                             onClick={handleLogout}
                             className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors w-full sm:w-auto"
@@ -217,545 +201,328 @@ export const AdminPage = () => {
                     </div>
                 </div>
 
-                {/* Stats */}
-                {stats && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
-                        <div className="bg-white rounded-xl shadow p-3 sm:p-4">
-                            <div className="text-gray-500 text-xs sm:text-sm mb-1">Всего</div>
-                            <div className="text-xl sm:text-2xl font-bold text-gray-800">{stats.total}</div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow p-3 sm:p-4">
-                            <div className="text-gray-500 text-xs sm:text-sm mb-1">Ожидают</div>
-                            <div className="text-xl sm:text-2xl font-bold text-blue-600">{stats.waiting}</div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow p-3 sm:p-4">
-                            <div className="text-gray-500 text-xs sm:text-sm mb-1">В буфере</div>
-                            <div className="text-xl sm:text-2xl font-bold text-orange-600">{stats.inBuffer}</div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow p-3 sm:p-4">
-                            <div className="text-gray-500 text-xs sm:text-sm mb-1">Обслужено</div>
-                            <div className="text-xl sm:text-2xl font-bold text-green-600">{stats.served}</div>
-                        </div>
-                        <div className="bg-white rounded-xl shadow p-3 sm:p-4 col-span-2 sm:col-span-1">
-                            <div className="text-gray-500 text-xs sm:text-sm mb-1">Отменено</div>
-                            <div className="text-xl sm:text-2xl font-bold text-red-600">{stats.cancelled}</div>
-                        </div>
+                {/* Tabs */}
+                <div className="bg-white rounded-xl shadow-lg mb-4 sm:mb-6 overflow-hidden">
+                    <div className="flex border-b border-gray-200">
+                        <button
+                            onClick={() => setActiveTab('meeting')}
+                            className={`flex-1 px-4 py-3 sm:px-6 sm:py-4 font-medium transition-colors ${
+                                activeTab === 'meeting'
+                                    ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <span className="text-lg mr-2">🎥</span>
+                            Вход в комнату
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('sessions')}
+                            className={`flex-1 px-4 py-3 sm:px-6 sm:py-4 font-medium transition-colors ${
+                                activeTab === 'sessions'
+                                    ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            <span className="text-lg mr-2">📋</span>
+                            Список сессий
+                        </button>
                     </div>
+                </div>
+
+                {/* Meeting Tab */}
+                {activeTab === 'meeting' && (
+                    <>
+                        {/* Health Status */}
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                            <h2 className="text-lg sm:text-xl font-semibold mb-4">Статус комнаты</h2>
+                            <div className={`flex items-center gap-3 p-4 rounded-lg ${
+                                health?.status === 'healthy' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                            }`}>
+                                <span className="text-3xl">
+                                    {health?.status === 'healthy' ? '✅' : '❌'}
+                                </span>
+                                <div className="flex-1">
+                                    <div className={`font-semibold ${
+                                        health?.status === 'healthy' ? 'text-green-800' : 'text-red-800'
+                                    }`}>
+                                        {health?.status === 'healthy' ? 'Комната активна' : 'Комната недоступна'}
+                                    </div>
+                                    {health?.adminMeeting && (
+                                        <div className="text-sm text-gray-600 mt-1">
+                                            <div>Код: {health.adminMeeting.code}</div>
+                                            <div>UID: {health.adminMeeting.uid}</div>
+                                        </div>
+                                    )}
+                                    {health?.error && (
+                                        <div className="text-sm text-red-600 mt-1">{health.error}</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Meeting Info */}
+                        {meetingInfo && (
+                            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                                <h2 className="text-lg sm:text-xl font-semibold mb-4">Информация о встрече</h2>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Название:</span>
+                                        <span className="font-medium">{meetingInfo.title}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Состояние:</span>
+                                        <span className="font-medium">{getStateText(meetingInfo.state)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600">Хост:</span>
+                                        <span className="font-medium">{meetingInfo.host_name}</span>
+                                    </div>
+                                    {meetingInfo.schedule_time && (
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-600">Запланировано:</span>
+                                            <span className="font-medium">
+                                                {new Date(meetingInfo.schedule_time).toLocaleString('ru-RU')}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Join Meeting Section */}
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                            <h2 className="text-lg sm:text-xl font-semibold mb-4">Войти в приемную комнату</h2>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-2">
+                                        Ваше имя для отображения
+                                    </label>
+                                    <input
+                                        id="displayName"
+                                        type="text"
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                        placeholder="Администратор"
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={handleJoinMeeting}
+                                    disabled={joining || health?.status !== 'healthy'}
+                                    className={`w-full py-3 rounded-lg font-semibold text-white transition-colors ${
+                                        health?.status === 'healthy' 
+                                            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700'
+                                            : 'bg-gray-400 cursor-not-allowed'
+                                    }`}
+                                >
+                                    {joining ? (
+                                        <div className="flex items-center justify-center">
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                                            Подключение...
+                                        </div>
+                                    ) : (
+                                        '▶️ Войти в приемную комнату'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+                            <h2 className="text-lg sm:text-xl font-semibold mb-4">Действия</h2>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleEnsureMeeting}
+                                    disabled={loading}
+                                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-400"
+                                >
+                                    🔄 Создать/обновить комнату
+                                </button>
+                                
+                                <button
+                                    onClick={() => checkHealth()}
+                                    disabled={loading}
+                                    className="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:bg-gray-400"
+                                >
+                                    🔍 Обновить статус
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-500">
+                            <p>Автоматическое обновление каждые 30 секунд</p>
+                        </div>
+                    </>
                 )}
 
-                {/* Bulk Actions */}
-                <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
-                    <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Массовые действия</h2>
-                    <div className="flex flex-col gap-2 sm:gap-3">
-                        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                            <input
-                                type="number"
-                                placeholder="От номера"
-                                value={bulkFrom}
-                                onChange={(e) => setBulkFrom(e.target.value)}
-                                className="border border-gray-300 rounded-lg px-3 sm:px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm sm:text-base"
-                            />
-                            <input
-                                type="number"
-                                placeholder="До номера"
-                                value={bulkTo}
-                                onChange={(e) => setBulkTo(e.target.value)}
-                                className="border border-gray-300 rounded-lg px-3 sm:px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm sm:text-base"
-                            />
+                {/* Sessions Tab */}
+                {activeTab === 'sessions' && (
+                    <>
+                        {/* Filters */}
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                            <h2 className="text-lg sm:text-xl font-semibold mb-4">Фильтры</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Поиск по телефону или UUID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                        placeholder="77011234567 или UUID..."
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Состояние
+                                    </label>
+                                    <select
+                                        value={stateFilter}
+                                        onChange={(e) => {
+                                            setStateFilter(e.target.value as SessionState | '');
+                                            setCurrentPage(0);
+                                        }}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    >
+                                        <option value="">Все</option>
+                                        <option value="CREATED">Создана</option>
+                                        <option value="WAITING">Ожидание</option>
+                                        <option value="SIGNED">Подписана</option>
+                                        <option value="FAILED">Ошибка</option>
+                                        <option value="EXPIRED">Истекла</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="mt-4">
+                                <button
+                                    onClick={handleSearch}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                                >
+                                    🔍 Поиск
+                                </button>
+                            </div>
                         </div>
-                        <select
-                            value={bulkStatus}
-                            onChange={(e) => setBulkStatus(e.target.value as QueueStatus)}
-                            className="border border-gray-300 rounded-lg px-3 sm:px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm sm:text-base"
-                        >
-                            <option value="WAITING">В ожидании</option>
-                            <option value="IN_BUFFER">В буфер</option>
-                            <option value="SERVED">Обслужен</option>
-                            <option value="CANCELLED">Отменен</option>
-                        </select>
-                        <button
-                            onClick={handleBulkUpdate}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base"
-                        >
-                            Применить
-                        </button>
-                    </div>
-                </div>
 
-                {/* Filters */}
-                <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
-                    <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Фильтры</h2>
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            onClick={() => setFilterStatus('')}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                                filterStatus === ''
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                        >
-                            Все
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('WAITING')}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                                filterStatus === 'WAITING'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                            }`}
-                        >
-                            В ожидании
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('IN_BUFFER')}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                                filterStatus === 'IN_BUFFER'
-                                    ? 'bg-orange-600 text-white'
-                                    : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
-                            }`}
-                        >
-                            В буфере
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('SERVED')}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                                filterStatus === 'SERVED'
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-green-100 text-green-700 hover:bg-green-200'
-                            }`}
-                        >
-                            Обслужено
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('CANCELLED')}
-                            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base ${
-                                filterStatus === 'CANCELLED'
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-red-100 text-red-700 hover:bg-red-200'
-                            }`}
-                        >
-                            Отменено
-                        </button>
-                    </div>
-                </div>
+                        {/* Sessions List */}
+                        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                            <div className="p-4 sm:p-6 border-b border-gray-200 flex justify-between items-center">
+                                <h2 className="text-lg sm:text-xl font-semibold">
+                                    Сессии ({sessions?.totalElements || 0})
+                                </h2>
+                                <button
+                                    onClick={() => loadSessions()}
+                                    disabled={sessionsLoading}
+                                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                                >
+                                    🔄 Обновить
+                                </button>
+                            </div>
 
-                {/* Queue List */}
-                <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="p-4 sm:p-6 border-b border-gray-200">
-                        <h2 className="text-lg sm:text-xl font-semibold">Список очередей ({queues?.length || 0})</h2>
-                    </div>
-
-                    {/* Mobile Card View */}
-                    {isMobileView ? (
-                        <div className="divide-y divide-gray-200">
-                            {!queues || queues.length === 0 ? (
-                                <div className="p-6 text-center text-gray-500">Нет данных</div>
+                            {sessionsLoading ? (
+                                <div className="p-8 text-center">
+                                    <div className="inline-block w-8 h-8 border-4 border-gray-200 rounded-full border-t-indigo-500 animate-spin mb-4" />
+                                    <p className="text-gray-600">Загрузка...</p>
+                                </div>
+                            ) : sessions && sessions.content.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">UUID</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Телефон</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ФИО</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ИИН</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Состояние</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Создана</th>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Подписана</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-200">
+                                            {sessions.content.map((session) => (
+                                                <tr key={session.sessionUuid} className="hover:bg-gray-50">
+                                                    <td className="px-4 py-3 text-xs font-mono text-gray-600">
+                                                        {session.sessionUuid.slice(0, 8)}...
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                                        {session.phoneNumber}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                                        {session.citizenName || '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-sm text-gray-900">
+                                                        {session.iin || '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getSessionStateColor(session.state)}`}>
+                                                            {getSessionStateText(session.state)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs text-gray-600">
+                                                        {new Date(session.createdAt).toLocaleString('ru-RU')}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs text-gray-600">
+                                                        {session.signedAt ? new Date(session.signedAt).toLocaleString('ru-RU') : '—'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             ) : (
-                                queues.map((queue) => {
-                                    const displayName = queue.fullName || '—';
-                                    return (
-                                        <div key={queue.id} className="p-4 space-y-3">
-                                            {/* Header Row */}
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="text-2xl font-bold text-gray-900">
-                                                        #{queue.sequenceNumber}
-                                                    </div>
-                                                    <span
-                                                        className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                                                            queue.status
-                                                        )}`}
-                                                    >
-                                                        {getStatusText(queue.status)}
-                                                    </span>
-                                                </div>
-                                            </div>
+                                <div className="p-8 text-center text-gray-500">
+                                    Нет сессий
+                                </div>
+                            )}
 
-                                            {/* Info Section */}
-                                            <div className="space-y-2 text-sm">
-                                                <div>
-                                                    <span className="text-gray-500">ФИО:</span>{' '}
-                                                    <span className="text-gray-900 font-medium">{displayName}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-gray-500">ИИН:</span>{' '}
-                                                    <span className="text-gray-900">{queue.iin || '—'}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-gray-500">Телефон:</span>{' '}
-                                                    <span className="text-gray-900">{queue.phoneNumber || '—'}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-gray-500">ID Сессии:</span>{' '}
-                                                    <span className="text-gray-900">{queue.sessionId}</span>
-                                                </div>
-                                                <div>
-                                                    <span className="text-gray-500">Создан:</span>{' '}
-                                                    <span className="text-gray-900">
-                                                        {new Date(queue.createdAt).toLocaleString('ru-RU')}
-                                                    </span>
-                                                </div>
-                                            </div>
+                            {/* Pagination */}
+                            {sessions && sessions.totalPages > 1 && (
+                                <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-gray-600">Размер страницы:</span>
+                                        <select
+                                            value={pageSize}
+                                            onChange={(e) => {
+                                                setPageSize(parseInt(e.target.value));
+                                                setCurrentPage(0);
+                                            }}
+                                            className="border border-gray-300 rounded px-2 py-1 text-sm"
+                                        >
+                                            <option value={10}>10</option>
+                                            <option value={20}>20</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
+                                    </div>
 
-                                            {/* Meeting URL Section */}
-                                            <div>
-                                                <div className="text-xs text-gray-500 mb-1">URL встречи:</div>
-                                                {editingUrl === queue.id ? (
-                                                    <div className="flex flex-col gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={newUrl}
-                                                            onChange={(e) => setNewUrl(e.target.value)}
-                                                            placeholder="https://..."
-                                                            className="border border-gray-300 rounded px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                        />
-                                                        <div className="flex gap-2">
-                                                            <button
-                                                                onClick={() => handleUrlUpdate(queue.id)}
-                                                                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm flex-1"
-                                                            >
-                                                                Сохранить
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setEditingUrl(null);
-                                                                    setNewUrl('');
-                                                                }}
-                                                                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm flex-1"
-                                                            >
-                                                                Отмена
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        {queue.meetingUrl ? (
-                                                            <a
-                                                                href={queue.meetingUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-indigo-600 hover:text-indigo-900 text-sm truncate flex-1"
-                                                            >
-                                                                {queue.meetingUrl}
-                                                            </a>
-                                                        ) : (
-                                                            <span
-                                                                className="text-gray-400 text-sm flex-1">Нет URL</span>
-                                                        )}
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingUrl(queue.id);
-                                                                setNewUrl(queue.meetingUrl || '');
-                                                            }}
-                                                            className="text-gray-500 hover:text-gray-700 p-2"
-                                                        >
-                                                            ✏️
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Actions */}
-                                            <div className="flex flex-wrap gap-2 pt-2">
-                                                {queue.status === 'WAITING' && (
-                                                    <button
-                                                        onClick={() => handleStatusChange(queue.id, 'IN_BUFFER')}
-                                                        className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded text-sm flex-1 min-w-[120px]"
-                                                    >
-                                                        В буфер
-                                                    </button>
-                                                )}
-                                                {queue.status === 'IN_BUFFER' && (
-                                                    <button
-                                                        onClick={() => handleStatusChange(queue.id, 'SERVED')}
-                                                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded text-sm flex-1 min-w-[120px]"
-                                                    >
-                                                        Обслужен
-                                                    </button>
-                                                )}
-                                                {queue.status !== 'CANCELLED' && queue.status !== 'SERVED' && (
-                                                    <button
-                                                        onClick={() => handleDelete(queue.id)}
-                                                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-sm flex-1 min-w-[120px]"
-                                                    >
-                                                        Отменить
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                                            disabled={currentPage === 0}
+                                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            ← Назад
+                                        </button>
+                                        <span className="text-sm text-gray-600">
+                                            Страница {currentPage + 1} из {sessions.totalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.min(sessions.totalPages - 1, p + 1))}
+                                            disabled={currentPage >= sessions.totalPages - 1}
+                                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Вперед →
+                                        </button>
+                                    </div>
+                                </div>
                             )}
                         </div>
-                    ) : (
-                        /* Desktop Table View */
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50">
-                                <tr>
-                                    <th
-                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                                        onClick={() => {
-                                            if (sortField === 'sequenceNumber') {
-                                                setSortDirection(sortDirection === 'ASC' ? 'DESC' : 'ASC');
-                                            } else {
-                                                setSortField('sequenceNumber');
-                                                setSortDirection('ASC');
-                                            }
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            № {sortField === 'sequenceNumber' && (sortDirection === 'ASC' ? '↑' : '↓')}
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        ID Сессии
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        ФИО
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        ИИН
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Телефон
-                                    </th>
-                                    <th
-                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                                        onClick={() => {
-                                            if (sortField === 'status') {
-                                                setSortDirection(sortDirection === 'ASC' ? 'DESC' : 'ASC');
-                                            } else {
-                                                setSortField('status');
-                                                setSortDirection('ASC');
-                                            }
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Статус {sortField === 'status' && (sortDirection === 'ASC' ? '↑' : '↓')}
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        URL встречи
-                                    </th>
-                                    <th
-                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                                        onClick={() => {
-                                            if (sortField === 'createdAt') {
-                                                setSortDirection(sortDirection === 'ASC' ? 'DESC' : 'ASC');
-                                            } else {
-                                                setSortField('createdAt');
-                                                setSortDirection('DESC');
-                                            }
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Создан {sortField === 'createdAt' && (sortDirection === 'ASC' ? '↑' : '↓')}
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Действия
-                                    </th>
-                                </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                {!queues || queues.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
-                                            Нет данных
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    queues.map((queue) => {
-                                        const displayName = queue.fullName || '—';
-                                        return (
-                                            <tr key={queue.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">
-                                                        {queue.sequenceNumber}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{queue.sessionId}</div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900 truncate max-w-[220px]"
-                                                         title={displayName}>
-                                                        {displayName}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">
-                                                        {queue.iin || '—'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">
-                                                        {queue.phoneNumber || '—'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span
-                                                            className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-                                                                queue.status
-                                                            )}`}
-                                                        >
-                                                            {getStatusText(queue.status)}
-                                                        </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {editingUrl === queue.id ? (
-                                                        <div className="flex gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={newUrl}
-                                                                onChange={(e) => setNewUrl(e.target.value)}
-                                                                placeholder="https://..."
-                                                                className="border border-gray-300 rounded px-2 py-1 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                            />
-                                                            <button
-                                                                onClick={() => handleUrlUpdate(queue.id)}
-                                                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
-                                                            >
-                                                                ✓
-                                                            </button>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setEditingUrl(null);
-                                                                    setNewUrl('');
-                                                                }}
-                                                                className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-2">
-                                                            {queue.meetingUrl ? (
-                                                                <a
-                                                                    href={queue.meetingUrl}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-indigo-600 hover:text-indigo-900 text-sm truncate max-w-xs"
-                                                                >
-                                                                    {queue.meetingUrl}
-                                                                </a>
-                                                            ) : (
-                                                                <span className="text-gray-400 text-sm">Нет URL</span>
-                                                            )}
-                                                            <button
-                                                                onClick={() => {
-                                                                    setEditingUrl(queue.id);
-                                                                    setNewUrl(queue.meetingUrl || '');
-                                                                }}
-                                                                className="text-gray-500 hover:text-gray-700 text-sm"
-                                                            >
-                                                                ✏️
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-500">
-                                                        {new Date(queue.createdAt).toLocaleString('ru-RU')}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                    <div className="flex flex-col gap-1">
-                                                        {queue.status === 'WAITING' && (
-                                                            <button
-                                                                onClick={() => handleStatusChange(queue.id, 'IN_BUFFER')}
-                                                                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-xs"
-                                                            >
-                                                                В буфер
-                                                            </button>
-                                                        )}
-                                                        {queue.status === 'IN_BUFFER' && (
-                                                            <button
-                                                                onClick={() => handleStatusChange(queue.id, 'SERVED')}
-                                                                className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs"
-                                                            >
-                                                                Обслужен
-                                                            </button>
-                                                        )}
-                                                        {queue.status !== 'CANCELLED' && queue.status !== 'SERVED' && (
-                                                            <button
-                                                                onClick={() => handleDelete(queue.id)}
-                                                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
-                                                            >
-                                                                Отменить
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </div>
-
-                {/* Pagination */}
-                <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mt-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        {/* Page Size Selector */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs sm:text-sm text-gray-500">Записей на странице:</span>
-                            <select
-                                value={pageSize}
-                                onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
-                                className="border border-gray-300 rounded-lg px-2 sm:px-3 py-1 sm:py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-xs sm:text-sm"
-                            >
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                            </select>
-                        </div>
-
-                        {/* Total Elements Info */}
-                        <div className="text-xs sm:text-sm text-gray-500 text-center">
-                            Всего записей: {totalElements}
-                        </div>
-
-                        {/* Pagination Controls */}
-                        <div className="flex items-center justify-center gap-2">
-                            <button
-                                onClick={() => handlePageChange(currentPage - 1)}
-                                disabled={currentPage === 0}
-                                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
-                                    currentPage === 0
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                }`}
-                            >
-                                Назад
-                            </button>
-                            <span className="text-xs sm:text-sm text-gray-700 font-medium whitespace-nowrap px-2">
-                                {currentPage + 1} / {totalPages || 1}
-                            </span>
-                            <button
-                                onClick={() => handlePageChange(currentPage + 1)}
-                                disabled={currentPage + 1 >= totalPages}
-                                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
-                                    currentPage + 1 >= totalPages
-                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                }`}
-                            >
-                                Вперед
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-4 sm:mt-6 text-center text-xs sm:text-sm text-gray-500">
-                    <p>Автоматическое обновление каждые 5 секунд</p>
-                </div>
+                    </>
+                )}
             </div>
         </div>
     );
