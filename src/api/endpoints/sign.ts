@@ -33,7 +33,7 @@ export const getSignStatus = async (sessionUUID: string): Promise<SignStatusResp
     try {
         if (typeof window !== 'undefined') {
             const pathname = window.location?.pathname || '';
-            const allowlist = ['/login', '/admin', '/completed'];
+            const allowlist = ['/login', '/admin', '/completed', '/meeting'];
             if (!allowlist.some(p => pathname.startsWith(p))) {
                 // Диагностический лог — покажет откуда вызван
                 console.debug('[getSignStatus] blocked call', { sessionId: sessionUUID, pathname, stack: new Error().stack });
